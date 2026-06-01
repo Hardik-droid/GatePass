@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { parseJson, withErrorHandling } from "@/backend/core/http";
 import { authEmailSchema } from "@/backend/core/schemas";
-import { getServerSession, isSupabaseAuthConfigured, setSessionCookie, clearSessionCookie } from "@/lib/server/session";
+import { getServerSession, isSupabaseAuthConfigured, setSessionCookie, clearSessionCookie } from "@/authO/lib/server/session";
 
 export async function GET() {
   return withErrorHandling(async () => {

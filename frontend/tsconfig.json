@@ -19,7 +19,10 @@
       }
     ],
     "paths": {
-      "@/backend/*": ["./backend/*"],
+      "@/backend/*": ["../backend/*"],
+      "@/frontend/*": ["./src/*"],
+      "@/database/*": ["../database/src/*"],
+      "@/authO/*": ["../authO/src/*"],
       "@/*": ["./src/*"]
     }
   },

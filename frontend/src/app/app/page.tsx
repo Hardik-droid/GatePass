@@ -4,7 +4,7 @@ import { Bell, MapPinned, ShieldCheck } from "lucide-react";
 import { StatusBadge } from "@/components/gatepass/admin-components";
 import { LogoutButton } from "@/components/gatepass/logout-button";
 import { getStore } from "@/backend/core/store";
-import { getServerSession } from "@/lib/server/session";
+import { getServerSession } from "@/authO/lib/server/session";
 
 export const dynamic = "force-dynamic";
 

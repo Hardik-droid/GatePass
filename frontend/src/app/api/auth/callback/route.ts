@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { isSupabaseAuthConfigured, setSessionCookie } from "@/lib/server/session";
+import { isSupabaseAuthConfigured, setSessionCookie } from "@/authO/lib/server/session";
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");

@@ -3,12 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "dev": "next dev frontend",
+    "build": "next build frontend",
+    "start": "next start frontend",
+    "lint": "cd frontend && eslint .",
+    "typecheck": "cd frontend && tsc --noEmit",
+    "test": "cd frontend && vitest run"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",
