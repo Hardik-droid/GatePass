@@ -1,0 +1,1 @@
+"""GatePass FastAPI backend."""

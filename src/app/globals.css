@@ -1,26 +1,282 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg-dark: #fafafa;
+  --bg-night: #f5f5f5;
+  --bg-paper: #ffffff;
+  --surface-dark: rgba(10, 127, 143, 0.08);
+  --surface-light: rgba(255, 255, 255, 0.92);
+  --ink: #1a1a1a;
+  --text-soft: rgba(26, 26, 26, 0.68);
+  --text-muted: rgba(26, 26, 26, 0.48);
+  --line: rgba(10, 127, 143, 0.12);
+  --purple: #0a7f8f;
+  --lime: #2d8f5f;
+  --red: #d32f4d;
+  --violet: #6b4d38;
+  --gp-brand-primary: #0a7f8f;
+  --gp-base-light: #fafafa;
+  --gp-luxury-base: var(--gp-base-light);
+  --gp-luxury-accent: #8d6c37;
+  --gp-luxury-verify: var(--gp-brand-primary);
+  --gp-luxury-secondary: var(--gp-luxury-verify);
+  --gp-party-base: var(--gp-base-light);
+  --gp-party-accent: #d32f4d;
+  --gp-party-energy: var(--gp-brand-primary);
+  --gp-party-secondary: var(--gp-party-energy);
+  --gp-concert-base: var(--gp-base-light);
+  --gp-concert-accent: var(--gp-brand-primary);
+  --gp-concert-energy: #3fb983;
+  --gp-concert-secondary: var(--gp-concert-energy);
+  --gp-hostel-base: var(--gp-base-light);
+  --gp-hostel-accent: #2d8f5f;
+  --gp-hostel-verify: var(--gp-brand-primary);
+  --gp-hostel-secondary: var(--gp-hostel-verify);
+  --gp-secure-base: var(--gp-base-light);
+  --gp-secure-verify: var(--gp-brand-primary);
+  --gp-secure-ok: #2d8f5f;
+  --gp-secure-accent: var(--gp-secure-verify);
+  --gp-secure-secondary: var(--gp-secure-ok);
+  --gp-workshop-base: var(--gp-base-light);
+  --gp-workshop-welcome: #6b4d38;
+  --gp-workshop-access: var(--gp-brand-primary);
+  --gp-workshop-accent: var(--gp-workshop-welcome);
+  --gp-workshop-secondary: var(--gp-workshop-access);
+  --gp-ivory: #fafafa;
+  --gp-cream: #f5f5f5;
+  --gp-bottle-green: var(--gp-hostel-accent);
+  --gp-champagne: var(--gp-brand-primary);
+  --gp-bronze: var(--gp-luxury-accent);
+  --gp-espresso: #1a1a1a;
+  --gp-oxblood: var(--gp-party-accent);
+  --gp-charcoal: #1a1a1a;
+  --gp-neon-pink: var(--gp-party-accent);
+  --gp-electric-blue: var(--gp-concert-accent);
+  --gp-violet: var(--gp-workshop-secondary);
+  --gp-laser-green: var(--gp-hostel-accent);
+  --gp-club-black: var(--gp-party-secondary);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg-dark: var(--bg-dark);
+  --color-bg-night: var(--bg-night);
+  --color-bg-paper: var(--bg-paper);
+  --color-surface-dark: var(--surface-dark);
+  --color-surface-light: var(--surface-light);
+  --color-ink: var(--ink);
+  --color-text-soft: var(--text-soft);
+  --color-text-muted: var(--text-muted);
+  --color-line: var(--line);
+  --color-purple: var(--purple);
+  --color-lime: var(--lime);
+  --color-red: var(--red);
+  --color-violet: var(--violet);
+  --color-gp-brand-primary: var(--gp-brand-primary);
+  --color-gp-base-light: var(--gp-base-light);
+  --color-gp-luxury-base: var(--gp-luxury-base);
+  --color-gp-luxury-accent: var(--gp-luxury-accent);
+  --color-gp-luxury-verify: var(--gp-luxury-verify);
+  --color-gp-luxury-secondary: var(--gp-luxury-secondary);
+  --color-gp-party-base: var(--gp-party-base);
+  --color-gp-party-accent: var(--gp-party-accent);
+  --color-gp-party-energy: var(--gp-party-energy);
+  --color-gp-party-secondary: var(--gp-party-secondary);
+  --color-gp-concert-base: var(--gp-concert-base);
+  --color-gp-concert-accent: var(--gp-concert-accent);
+  --color-gp-concert-energy: var(--gp-concert-energy);
+  --color-gp-concert-secondary: var(--gp-concert-secondary);
+  --color-gp-hostel-base: var(--gp-hostel-base);
+  --color-gp-hostel-accent: var(--gp-hostel-accent);
+  --color-gp-hostel-verify: var(--gp-hostel-verify);
+  --color-gp-hostel-secondary: var(--gp-hostel-secondary);
+  --color-gp-secure-base: var(--gp-secure-base);
+  --color-gp-secure-accent: var(--gp-secure-accent);
+  --color-gp-secure-verify: var(--gp-secure-verify);
+  --color-gp-secure-ok: var(--gp-secure-ok);
+  --color-gp-secure-secondary: var(--gp-secure-secondary);
+  --color-gp-workshop-base: var(--gp-workshop-base);
+  --color-gp-workshop-accent: var(--gp-workshop-accent);
+  --color-gp-workshop-welcome: var(--gp-workshop-welcome);
+  --color-gp-workshop-access: var(--gp-workshop-access);
+  --color-gp-workshop-secondary: var(--gp-workshop-secondary);
+  --color-gp-ivory: var(--gp-ivory);
+  --color-gp-cream: var(--gp-cream);
+  --color-gp-bottle-green: var(--gp-bottle-green);
+  --color-gp-champagne: var(--gp-champagne);
+  --color-gp-bronze: var(--gp-bronze);
+  --color-gp-espresso: var(--gp-espresso);
+  --color-gp-oxblood: var(--gp-oxblood);
+  --color-gp-charcoal: var(--gp-charcoal);
+  --color-gp-neon-pink: var(--gp-neon-pink);
+  --color-gp-electric-blue: var(--gp-electric-blue);
+  --color-gp-violet: var(--gp-violet);
+  --color-gp-laser-green: var(--gp-laser-green);
+  --color-gp-club-black: var(--gp-club-black);
+  --font-sans: var(--font-body);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--gp-base-light);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background: var(--gp-base-light);
+  color: var(--ink);
+  font-family: var(--font-body), sans-serif;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.serif-display {
+  font-family: Georgia, "Times New Roman", serif;
+  letter-spacing: -0.04em;
+}
+
+.luxury-display {
+  font-family: var(--font-luxury), Georgia, serif;
+  letter-spacing: -0.055em;
+}
+
+.luxury-label {
+  font-family: var(--font-label), Georgia, serif;
+  letter-spacing: 0.2em;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+}
+
+.poster-text {
+  font-family: var(--font-display), sans-serif;
+  letter-spacing: -0.02em;
+  line-height: 0.88;
+}
+
+.noise-layer::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.08;
+  background-image:
+    linear-gradient(140deg, rgba(255, 255, 255, 0.06), transparent 26%),
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.05) 0 1px,
+      transparent 1px 3px
+    );
+  mix-blend-mode: soft-light;
+}
+
+.glass-phone {
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow:
+    inset 0 0 0 1px rgba(10, 127, 143, 0.1),
+    0 28px 90px rgba(10, 127, 143, 0.12);
+}
+
+.marquee-row,
+.floating-card,
+.hero-shell,
+.proof-card,
+.stat-card {
+  will-change: transform, opacity;
+}
+
+.floating-card img {
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.22);
+}
+
+.concert-globe {
+  animation: concert-globe-drift 9s ease-in-out infinite;
+  will-change: transform, filter;
+}
+
+.concert-light-sweep {
+  background: rgba(10, 127, 143, 0.08);
+  animation: concert-light-sweep 7s ease-in-out infinite alternate;
+  will-change: transform, opacity;
+}
+
+.category-rail-track {
+  animation: category-rail-loop 26s linear infinite;
+  will-change: transform;
+}
+
+.category-rail-loop:hover .category-rail-track,
+.category-rail-loop:focus-within .category-rail-track {
+  animation-play-state: paused;
+}
+
+.category-pill {
+  transform-origin: center;
+}
+
+@keyframes concert-globe-drift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1) rotate(-1deg);
+    filter: saturate(0.92) contrast(1.02);
+  }
+  50% {
+    transform: translate3d(-18px, 12px, 0) scale(1.035) rotate(1.4deg);
+    filter: saturate(1.08) contrast(1.08);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1) rotate(-1deg);
+    filter: saturate(0.92) contrast(1.02);
+  }
+}
+
+@keyframes category-rail-loop {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@keyframes concert-light-sweep {
+  from {
+    transform: translateX(-8%) skewX(-8deg);
+    opacity: 0.28;
+  }
+  to {
+    transform: translateX(8%) skewX(-8deg);
+    opacity: 0.56;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
 }
