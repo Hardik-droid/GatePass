@@ -5,6 +5,54 @@ import Image from "next/image";
 import { StatusBadge } from "@/components/gatepass/admin-components";
 import { WalletSmartRedirect } from "@/components/gatepass/wallet-actions";
 
+export function GoogleWalletDirectButton({ ticketId }: { ticketId: string }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleAddToWallet = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const res = await fetch("/api/wallet/google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticketId }),
+      });
+      if (!res.ok) throw new Error("Failed to generate Google Wallet link");
+      const data = await res.json();
+      if (data.saveUrl) {
+        window.location.href = data.saveUrl;
+      } else {
+        throw new Error(data.error || "No saveUrl returned");
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="mt-4 flex flex-col items-center">
+      <button
+        onClick={handleAddToWallet}
+        disabled={loading}
+        className="transition hover:opacity-90 active:opacity-80 disabled:opacity-50"
+        aria-label="Add to Google Wallet"
+      >
+        <img 
+          src="https://wallet.google/images/branding/en/add_to_google_wallet/black-badge.svg" 
+          alt="Add to Google Wallet" 
+          className="h-[48px]"
+        />
+      </button>
+      {loading && <p className="mt-2 text-center text-xs font-medium text-gray-500">Preparing Wallet Link...</p>}
+      {error && <p className="mt-2 text-center text-xs text-red-600">{error}</p>}
+    </div>
+  );
+}
+
+
 export function PassClient({
   ticketId,
   token,
@@ -66,8 +114,10 @@ export function PassClient({
         QR uses a secure signed token. Personal data is not encoded.
       </p>
       <div className="mt-5">
-        <WalletSmartRedirect ticketId={ticketId} qrToken={token} autoOpen={false} />
+        <GoogleWalletDirectButton ticketId={ticketId} />
+        {/* <WalletSmartRedirect ticketId={ticketId} qrToken={token} autoOpen={false} /> */}
       </div>
+
     </div>
   );
 }

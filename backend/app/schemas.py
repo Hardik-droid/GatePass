@@ -129,6 +129,12 @@ class Ticket(BaseModel):
     checked_in_at: datetime | None = None
     checked_in_gate_id: str | None = None
     checked_in_by: str | None = None
+    google_wallet_object_id: str | None = None
+    wallet_added_at: datetime | None = None
+    qr_token_hash: str | None = None
+    expires_at: datetime | None = None
+    used_at: datetime | None = None
+    used_by_scanner_id: str | None = None
     created_at: datetime
 
 
@@ -161,6 +167,9 @@ class ScanLog(BaseModel):
     device_id: str
     scan_result: ScanState
     metadata: dict = Field(default_factory=dict)
+    reason: str | None = None
+    ip_address: str | None = None
+    user_agent: str | None = None
     scan_time: datetime
 
 

@@ -7,8 +7,13 @@ from app.services.events import create_event, create_ticket_category, get_event_
 from app.services.gps import create_gatepass_request, log_location
 from app.services.orders import create_order, dev_payment_simulator
 from app.services.scanner import manual_lookup, validate_scan
+from app.services.wallet_google import _hash_token
+from app.schemas import ScanLog, ScanState, TicketStatus
+from app.core.store import new_id, now
+from app.routers import wallet
 
 router = APIRouter()
+router.include_router(wallet.router, prefix="/wallet", tags=["wallet"])
 
 
 @router.get("/health")
@@ -132,3 +137,50 @@ def post_gatepass_request(payload: GatepassRequestCreate) -> dict:
 @router.post("/gps/log-location")
 def post_location(payload: GpsLocationCreate) -> dict:
     return {"location": log_location(payload)}
+
+
+@router.get("/gatepass/verify/{token}")
+@router.post("/gatepass/verify/{token}")
+def verify_gatepass(token: str) -> dict:
+    token_hash = _hash_token(token)
+    ticket = next((t for t in store.tickets if t.qr_token_hash == token_hash), None)
+    if not ticket:
+        return {"result": "DENY_INVALID"}
+    
+    if ticket.status == TicketStatus.CANCELLED:
+        return {"result": "DENY_CANCELLED"}
+    if ticket.status == TicketStatus.EXPIRED:
+        return {"result": "DENY_EXPIRED"}
+    if ticket.status == TicketStatus.REFUNDED:
+        return {"result": "DENY_INVALID"}
+    
+    if ticket.status == TicketStatus.CHECKED_IN or ticket.used_at is not None:
+        return {
+            "result": "DENY_ALREADY_USED",
+            "ticketId": ticket.id,
+            "usedAt": ticket.used_at.isoformat() if ticket.used_at else None
+        }
+    
+    ticket.status = TicketStatus.CHECKED_IN
+    ticket.used_at = now()
+    ticket.used_by_scanner_id = "wallet_scanner"
+    
+    scan = ScanLog(
+        id=new_id("scan"),
+        event_id=ticket.event_id,
+        ticket_id=ticket.id,
+        scanner_user_id="wallet_scanner",
+        gate_id="wallet_gate",
+        device_id="wallet",
+        scan_result=ScanState.VALID,
+        scan_time=now(),
+        reason="Wallet QR scan"
+    )
+    store.scan_logs.append(scan)
+    
+    return {
+        "result": "ACCEPT",
+        "ticketId": ticket.id,
+        "holderName": ticket.attendee_name,
+        "status": ticket.status
+    }
