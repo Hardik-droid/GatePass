@@ -2,6 +2,8 @@
 
 import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
+import QRCode from "qrcode";
 import {
   ArrowLeft,
   CreditCard,
@@ -60,6 +62,75 @@ const walletList = [
   { id: "gpay", name: "Google Pay", logo: "🔵" },
   { id: "amazon", name: "Amazon Pay", logo: "🟠" },
 ];
+
+function TicketQr({ ticketId, token }: { ticketId: string; token: string }) {
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!token) return;
+    let active = true;
+    QRCode.toDataURL(token, {
+      errorCorrectionLevel: "M",
+      margin: 1,
+      width: 220,
+      color: {
+        dark: "#0a7f8f",
+        light: "#ffffff",
+      },
+    })
+      .then((url) => {
+        if (active) {
+          setQrDataUrl(url);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.error("Error generating QR:", err);
+        if (active) {
+          setLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [token]);
+
+  return (
+    <div className="relative w-36 h-36 flex items-center justify-center">
+      {/* Decorative Green Corners */}
+      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100">
+        <path
+          d="M5,5 h30 M5,5 v30 M95,5 h-30 M95,5 v30 M5,95 h30 M5,95 v-30 M95,95 h-30 M95,95 v-30"
+          stroke="#10b981"
+          strokeWidth="4"
+          fill="none"
+        />
+      </svg>
+      <div className="absolute w-28 h-28 flex items-center justify-center">
+        {qrDataUrl ? (
+          <Image
+            src={qrDataUrl}
+            alt={`GatePass QR ${ticketId}`}
+            width={112}
+            height={112}
+            unoptimized
+            className="w-full h-full object-contain"
+          />
+        ) : loading ? (
+          <div className="flex flex-col items-center justify-center gap-1.5">
+            <div className="w-5 h-5 border-2 border-[#10b981] border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-[9px] text-gray-400 font-medium">Generating QR...</span>
+          </div>
+        ) : (
+          <span className="text-[10px] text-red-500 font-medium text-center">
+            Error loading QR
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function BookingClient({
   event,
@@ -219,33 +290,7 @@ export function BookingClient({
                   return (
                     <div key={ticket.id} className="w-full flex flex-col items-center bg-gray-50 p-4 rounded-xl border border-gray-100">
                       <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm mb-2">
-                        <svg className="w-36 h-36" viewBox="0 0 100 100">
-                          <path d="M5,5 h30 M5,5 v30 M95,5 h-30 M95,5 v30 M5,95 h30 M5,95 v-30 M95,95 h-30 M95,95 v-30" stroke="#10b981" strokeWidth="4" fill="none" />
-                          <rect x="15" y="15" width="20" height="20" fill="#1f2937" />
-                          <rect x="19" y="19" width="12" height="12" fill="white" />
-                          <rect x="22" y="22" width="6" height="6" fill="#1f2937" />
-
-                          <rect x="65" y="15" width="20" height="20" fill="#1f2937" />
-                          <rect x="69" y="19" width="12" height="12" fill="white" />
-                          <rect x="72" y="22" width="6" height="6" fill="#1f2937" />
-
-                          <rect x="15" y="65" width="20" height="20" fill="#1f2937" />
-                          <rect x="19" y="69" width="12" height="12" fill="white" />
-                          <rect x="22" y="72" width="6" height="6" fill="#1f2937" />
-
-                          <rect x="42" y="18" width="6" height="6" fill="#1f2937" />
-                          <rect x="52" y="26" width="6" height="6" fill="#1f2937" />
-                          <rect x="46" y="38" width="6" height="6" fill="#1f2937" />
-                          <rect x="22" y="48" width="6" height="6" fill="#1f2937" />
-                          <rect x="36" y="52" width="6" height="6" fill="#1f2937" />
-                          <rect x="58" y="48" width="6" height="6" fill="#1f2937" />
-                          <rect x="68" y="42" width="6" height="6" fill="#1f2937" />
-                          <rect x="78" y="52" width="6" height="6" fill="#1f2937" />
-                          <rect x="48" y="64" width="6" height="6" fill="#1f2937" />
-                          <rect x="62" y="74" width="6" height="6" fill="#1f2937" />
-                          <rect x="40" y="78" width="6" height="6" fill="#1f2937" />
-                          <rect x="54" y="84" width="6" height="6" fill="#1f2937" />
-                        </svg>
+                        <TicketQr ticketId={ticket.id} token={token} />
                       </div>
                       <Link
                         href={link}

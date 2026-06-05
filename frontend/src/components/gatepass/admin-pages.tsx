@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { AppShell, AttendanceChart, AuditTimeline, EmptyState, MapPanel, MetricsGrid, OrdersTable, RevenueChart, ScannerResult, StatusBadge, TicketLifecycle } from "@/components/gatepass/admin-components";
 import { auditEvents, ticketCategories } from "@/lib/mock-data";
+import { QRScanner } from "@/components/gatepass/qr-scanner";
 
 export function DashboardOverview() {
   return (
@@ -49,21 +50,42 @@ export function BuilderPage() {
   const types = ["Public event", "Private event", "Invite-only event", "Internal campus event", "Paid workshop", "Free registration", "Donation-based event", "Hostel gate pass", "Multi-day concert"];
   return (
     <AppShell title="Event Builder">
-      <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
-        <div className="grid gap-4 md:grid-cols-2">
-          {fields.map((field) => (
-            <label key={field} className="grid gap-2 rounded-[22px] border border-white/10 bg-white/[0.055] p-4">
-              <span className="text-sm font-bold">{field}</span>
-              <input className="rounded-2xl border border-white/10 bg-black/24 px-4 py-3 outline-none" placeholder={field} />
-            </label>
-          ))}
-        </div>
-        <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-5">
-          <p className="text-sm font-black uppercase tracking-[0.18em] text-white/52">Event types</p>
-          <div className="mt-4 grid gap-2">
-            {types.map((type) => (
-              <StatusBadge key={type} status={type} />
-            ))}
+      <div className="relative overflow-hidden rounded-[34px] border border-[#f7efd9]/14 bg-[linear-gradient(135deg,rgba(53,40,32,.92),rgba(29,20,15,.96)),linear-gradient(90deg,rgba(200,170,99,.18),transparent_55%)] p-6 shadow-[0_38px_90px_rgba(0,0,0,.45),inset_0_1px_0_rgba(255,255,255,.08),inset_0_-1px_0_rgba(0,0,0,.45)] md:p-12">
+        <div className="pointer-events-none absolute inset-px rounded-[33px] bg-[linear-gradient(120deg,rgba(255,255,255,.08),transparent_30%,rgba(200,170,99,.08)_100%)] opacity-65 [mask-image:linear-gradient(#000,transparent_88%)]" />
+        <div className="relative z-10">
+          <p className="luxury-label inline-flex items-center gap-3 text-xs font-bold uppercase text-[var(--gp-champagne)] before:h-px before:w-10 before:bg-[linear-gradient(90deg,transparent,var(--gp-champagne))]">
+            Craft an Experience
+          </p>
+          <h2 className="luxury-display mt-5 max-w-4xl text-5xl font-bold leading-[.86] text-[#fff7e3] drop-shadow-[0_8px_36px_rgba(0,0,0,.52)]">
+            Design your next event.
+          </h2>
+
+          <div className="mt-12 grid gap-6 xl:grid-cols-[1fr_380px]">
+            <div className="grid gap-4 md:grid-cols-2">
+              {fields.map((field) => (
+                <label key={field} className="grid gap-2 rounded-[22px] border border-[#f7efd9]/10 bg-black/40 p-4 transition duration-300 hover:border-[#c8aa63]/45 hover:bg-[linear-gradient(145deg,rgba(43,31,24,.98),rgba(18,13,10,.98))]">
+                  <span className="text-sm font-bold text-[var(--gp-champagne)]">{field}</span>
+                  <input className="rounded-2xl border border-white/5 bg-white/5 px-4 py-3 text-[#fff8e8] outline-none transition focus:border-[var(--gp-champagne)]/50 focus:bg-white/10" placeholder={field} />
+                </label>
+              ))}
+              
+              <div className="mt-6 flex flex-col items-center justify-center rounded-[24px] border border-[#c8aa63]/30 bg-[linear-gradient(145deg,rgba(200,170,99,.15),transparent)] p-8 text-center shadow-[0_18px_35px_rgba(0,0,0,.25)] md:col-span-2">
+                <h3 className="luxury-display mb-4 text-3xl font-bold text-[#fff8e8]">Ready to launch?</h3>
+                <p className="mb-8 max-w-lg text-[#fff7e3]/70 text-sm">Your event will be instantly available on the GatePass GPS network. Review your details and let's make it live.</p>
+                <button type="button" className="luxury-label inline-flex min-h-16 w-full max-w-sm items-center justify-center gap-4 rounded-full border border-[#fff7e3]/70 bg-[linear-gradient(135deg,rgba(255,250,234,.98),rgba(228,212,176,.96))] px-7 py-4 text-center text-sm font-bold uppercase text-[#3d2d19]/80 shadow-[0_22px_50px_rgba(0,0,0,.35),inset_0_1px_0_rgba(255,255,255,.7)] transition-transform duration-300 hover:-translate-y-1">
+                  <span>Create Event Now</span>
+                </button>
+              </div>
+            </div>
+            
+            <div className="rounded-[28px] border border-[#f7efd9]/10 bg-black/40 p-5 backdrop-blur-md">
+              <p className="luxury-label text-sm font-black uppercase tracking-[0.18em] text-[var(--gp-champagne)]/80">Event types</p>
+              <div className="mt-4 grid gap-2">
+                {types.map((type) => (
+                  <StatusBadge key={type} status={type} />
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -260,80 +282,305 @@ export function ScannerPageUI({ manual = false }: { manual?: boolean }) {
   const [qrToken, setQrToken] = useState("");
   const [scanResult, setScanResult] = useState<Record<string, string> | null>(null);
   const [message, setMessage] = useState("");
-  async function submitScan() {
-    setMessage("");
-    const response = await fetch("/api/scanner", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "idempotency-key": crypto.randomUUID(),
-      },
-      body: JSON.stringify({
-        eventId: "auto",
-        gateId: "gate_main",
-        deviceId: "web-scanner-01",
-        scannerUserId: "usr_scanner_demo",
-        qrToken,
-      }),
-    });
-    const payload = await response.json();
-    setScanResult(payload);
+  const [isCameraScanner, setIsCameraScanner] = useState(!manual);
+
+  // Helper to extract token from URL or raw text
+  function extractToken(scannedText: string): string {
+    try {
+      if (scannedText.startsWith("http://") || scannedText.startsWith("https://")) {
+        const url = new URL(scannedText);
+        const token = url.searchParams.get("token");
+        if (token) return token;
+
+        const pathParts = url.pathname.split("/");
+        const passIndex = pathParts.indexOf("pass");
+        if (passIndex !== -1 && pathParts[passIndex + 1]) {
+          return pathParts[passIndex + 1];
+        }
+      }
+    } catch (e) {
+      // Ignore URL parsing errors
+    }
+    return scannedText;
   }
+
+  async function handleScan(scannedText: string) {
+    if (!scannedText) return;
+    setQrToken(scannedText);
+    setMessage("Processing scanned QR...");
+
+    if (scannedText.startsWith("GP1.")) {
+      // Production MongoDB-based ticket
+      try {
+        const response = await fetch("/api/tickets/scan", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            qrPayload: scannedText,
+            scannerId: "web-camera-scanner-01",
+          }),
+        });
+        const payload = await response.json();
+        if (payload.ok) {
+          setScanResult({
+            status: "VALID",
+            message: "Entry allowed. Ticket validated successfully.",
+            ticketId: payload.ticket?.ticketId || "unknown",
+            attendeeName: payload.ticket?.email || "Attendee",
+            category: "Student Ticket",
+            payment: "Paid",
+            checkedInAt: payload.ticket?.usedAt || new Date().toISOString(),
+            gateName: "Main Gate",
+          });
+          setMessage("Scan successful! Ticket checked in.");
+        } else {
+          // Map MongoDB error states to ScannerResult states
+          let mappedStatus = "INVALID";
+          if (payload.reason === "ticket_used" || payload.reason === "ticket_checked_in" || payload.reason === "ticket_used_already") {
+            mappedStatus = "ALREADY USED";
+          } else if (payload.reason === "ticket_expired") {
+            mappedStatus = "EXPIRED";
+          }
+
+          setScanResult({
+            status: mappedStatus,
+            message: `Scan rejected: ${payload.reason || "Invalid ticket"}`,
+            ticketId: "unknown",
+          });
+          setMessage(`Rejected: ${payload.reason || "Invalid ticket"}`);
+        }
+      } catch (err) {
+        console.error("MongoDB Scan validation failed:", err);
+        setScanResult({
+          status: "INVALID",
+          message: "Database ticket scan verification failed.",
+        });
+        setMessage("Server error validating database ticket.");
+      }
+    } else {
+      // Mock / Memory-based ticket
+      const token = extractToken(scannedText);
+      try {
+        const response = await fetch("/api/scanner", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "idempotency-key": crypto.randomUUID(),
+          },
+          body: JSON.stringify({
+            eventId: "auto",
+            gateId: "gate_main",
+            deviceId: "web-scanner-01",
+            scannerUserId: "usr_scanner_demo",
+            qrToken: token,
+          }),
+        });
+        const payload = await response.json();
+
+        // Fetch detailed mock ticket info to fill ScannerResult card with nice values
+        let details: Record<string, string> = {};
+        if (payload.status === "VALID" || payload.status === "ALREADY USED") {
+          try {
+            const lookupResponse = await fetch("/api/scanner/manual-lookup", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ query: payload.ticketId || token }),
+            });
+            const lookupPayload = await lookupResponse.json();
+            if (lookupPayload.items?.length) {
+              const ticket = lookupPayload.items[0];
+              details = {
+                attendeeName: ticket.attendeeName || ticket.attendeeEmail || "Attendee",
+                category: ticket.ticketCategoryId === "vip" ? "VIP" : "General",
+                payment: "Paid",
+              };
+            }
+          } catch (lookupErr) {
+            console.error("Mock details lookup failed:", lookupErr);
+          }
+        }
+
+        setScanResult({
+          status: payload.status,
+          message: payload.message || `Scanned mock ticket: ${payload.status}`,
+          ticketId: payload.ticketId || token,
+          checkedInAt: payload.checkedInAt || payload.scannedAt || new Date().toISOString(),
+          gateName: payload.gateName || "Main Gate",
+          ...details,
+        });
+        setMessage(payload.message || `Mock Scan status: ${payload.status}`);
+      } catch (err) {
+        console.error("Mock scan verification failed:", err);
+        setScanResult({
+          status: "INVALID",
+          message: "Mock ticket scan verification failed.",
+        });
+        setMessage("Server error validating mock ticket.");
+      }
+    }
+  }
+
+  async function submitScan() {
+    if (!qrToken.trim()) {
+      setMessage("Enter a ticket, phone, name, order, or token to search.");
+      return;
+    }
+    await handleScan(qrToken.trim());
+  }
+
   async function submitManualLookup() {
     if (!qrToken.trim()) {
       setMessage("Enter a ticket, phone, name, order, or token to search.");
       return;
     }
-    const response = await fetch("/api/scanner/manual-lookup", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ query: qrToken }),
-    });
-    const payload = await response.json();
-    setScanResult({
-      status: payload.items?.length ? "VALID" : "INVALID",
-      message: payload.items?.length ? `Found ${payload.items.length} matching ticket(s).` : "No matching ticket found.",
-      ticketId: payload.items?.[0]?.id ?? "",
-      gateName: "Manual lookup",
-    });
+    setMessage("Searching database...");
+    try {
+      const response = await fetch("/api/scanner/manual-lookup", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ query: qrToken }),
+      });
+      const payload = await response.json();
+      if (payload.items?.length) {
+        const ticket = payload.items[0];
+        setScanResult({
+          status: ticket.status === "checked_in" ? "ALREADY USED" : "VALID",
+          message: `Found ticket for ${ticket.attendeeName}.`,
+          ticketId: ticket.id,
+          attendeeName: ticket.attendeeName,
+          category: ticket.ticketCategoryId === "vip" ? "VIP" : "General",
+          payment: "Paid",
+          checkedInAt: ticket.checkedInAt || new Date().toISOString(),
+          gateName: "Manual lookup",
+        });
+        setMessage(`Manual lookup found ticket for: ${ticket.attendeeName}`);
+      } else {
+        setScanResult({
+          status: "INVALID",
+          message: "No matching ticket found.",
+          ticketId: "",
+          gateName: "Manual lookup",
+        });
+        setMessage("No matching ticket found in database.");
+      }
+    } catch (err) {
+      console.error("Manual lookup failed:", err);
+      setMessage("Failed to run database lookup.");
+    }
   }
+
   function markDecision(decision: string) {
     setMessage(decision);
   }
+
   return (
     <main className="min-h-screen bg-black px-4 py-8 text-white md:px-8">
       <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[1fr_420px]">
         <section>
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--gp-champagne)]">Mobile web scanner</p>
-          <h1 className="mt-3 font-serif text-6xl">{manual ? "Manual Lookup" : "Scanner"}</h1>
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--gp-champagne)]">Mobile web scanner</p>
+            <h1 className="font-serif text-6xl">{isCameraScanner ? "Scanner" : "Manual Lookup"}</h1>
+            
+            {/* Toggle bar between scanner modes */}
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setIsCameraScanner(true)}
+                className={`rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-[0.12em] transition-all duration-300 ${
+                  isCameraScanner
+                    ? "bg-[var(--gp-champagne)] text-[var(--gp-espresso)] shadow-[0_0_15px_rgba(201,176,106,0.3)]"
+                    : "bg-white/5 text-white/50 hover:bg-white/10"
+                }`}
+              >
+                Camera Scan
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsCameraScanner(false)}
+                className={`rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-[0.12em] transition-all duration-300 ${
+                  !isCameraScanner
+                    ? "bg-[var(--gp-champagne)] text-[var(--gp-espresso)] shadow-[0_0_15px_rgba(201,176,106,0.3)]"
+                    : "bg-white/5 text-white/50 hover:bg-white/10"
+                }`}
+              >
+                Text Lookup
+              </button>
+            </div>
+          </div>
+
           <div className="mt-8 rounded-[32px] border border-white/10 bg-white/[0.055] p-4">
-            <div className="flex aspect-square items-center justify-center rounded-[28px] border border-dashed border-white/20 bg-[radial-gradient(circle_at_50%_50%,rgba(125,255,60,.18),transparent_28%),#050505]">
-              <span className="text-sm font-black uppercase tracking-[0.18em] text-white/50">{manual ? "Search by ticket, phone, name, order, token" : "Camera scanner area"}</span>
-            </div>
+            {/* Scan Area */}
+            {isCameraScanner ? (
+              <div className="w-full aspect-square rounded-[24px] overflow-hidden border border-white/10 p-1 bg-black animate-[fadeIn_0.5s_ease-out]">
+                <QRScanner onScan={handleScan} isScanningActive={isCameraScanner} />
+              </div>
+            ) : (
+              <div className="flex aspect-square items-center justify-center rounded-[28px] border border-dashed border-white/20 bg-[radial-gradient(circle_at_50%_50%,rgba(125,255,60,.12),transparent_28%),#050505] p-6 text-center">
+                <span className="text-sm font-black uppercase tracking-[0.18em] text-white/40">
+                  Search by ticket ID, phone, name, email, or token in fields below
+                </span>
+              </div>
+            )}
+
+            {/* Input fields */}
             <label className="mt-4 grid gap-2">
-              <span className="text-xs font-black uppercase tracking-[0.14em] text-white/48">QR token</span>
-              <textarea value={qrToken} onChange={(event) => setQrToken(event.target.value)} className="min-h-24 rounded-2xl border border-white/10 bg-black/50 px-4 py-3 text-sm outline-none" placeholder="Paste signed QR token from the pass link" />
+              <span className="text-xs font-black uppercase tracking-[0.14em] text-white/48">Scanned Payload / Token</span>
+              <textarea 
+                value={qrToken} 
+                onChange={(event) => setQrToken(event.target.value)} 
+                className="min-h-24 rounded-2xl border border-white/10 bg-black/50 px-4 py-3 text-sm outline-none text-white focus:border-[var(--gp-champagne)]/40 focus:bg-black/70 transition-all" 
+                placeholder={isCameraScanner ? "Scanned QR data will populate here automatically..." : "Paste signed QR token, ticket ID, name, email..."} 
+              />
             </label>
+
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <button type="button" onClick={submitScan} className="rounded-2xl bg-emerald-400 px-4 py-3 font-black text-black">Validate QR</button>
-              <button type="button" onClick={submitManualLookup} className="rounded-2xl bg-white/10 px-4 py-3 font-bold hover:bg-white/16">Manual Lookup</button>
+              <button 
+                type="button" 
+                onClick={submitScan} 
+                className="rounded-2xl bg-emerald-400 px-4 py-3 font-black text-black hover:bg-emerald-300 transition-all active:scale-[0.98]"
+              >
+                Validate QR
+              </button>
+              <button 
+                type="button" 
+                onClick={submitManualLookup} 
+                className="rounded-2xl bg-white/10 px-4 py-3 font-bold hover:bg-white/16 transition-all active:scale-[0.98]"
+              >
+                Manual Lookup
+              </button>
             </div>
-            {message ? <p className="mt-3 rounded-2xl bg-white/10 px-4 py-3 text-sm font-bold text-white/74">{message}</p> : null}
+
+            {message ? (
+              <p className="mt-3 rounded-2xl bg-white/10 px-4 py-3 text-sm font-bold text-white/70 transition-all border border-white/5 animate-pulse">
+                {message}
+              </p>
+            ) : null}
           </div>
         </section>
+
         <section className="grid gap-4">
-          <ScannerResult state={(scanResult?.status as never) || (manual ? "ALREADY USED" : "VALID")} />
+          <ScannerResult 
+            state={(scanResult?.status as never) || (manual ? "ALREADY USED" : "VALID")} 
+            ticketId={scanResult?.ticketId}
+            attendeeName={scanResult?.attendeeName}
+            category={scanResult?.category}
+            payment={scanResult?.payment}
+            checkedInTime={scanResult?.checkedInAt}
+            gateName={scanResult?.gateName}
+          />
           {scanResult ? (
-            <div className="rounded-2xl border border-white/10 bg-white/8 p-4 text-sm">
-              <p className="font-bold">{scanResult.message}</p>
-              <p className="mt-2 text-white/54">Ticket: {scanResult.ticketId ?? "unknown"}</p>
-              <p className="text-white/54">Checked in: {scanResult.checkedInAt ?? scanResult.scannedAt}</p>
-              <p className="text-white/54">Gate: {scanResult.gateName ?? "Main Gate"}</p>
+            <div className="rounded-2xl border border-white/10 bg-white/8 p-4 text-sm backdrop-blur-md">
+              <p className="font-bold text-emerald-300">{scanResult.message}</p>
+              {scanResult.ticketId && <p className="mt-2 text-white/54">Ticket ID: {scanResult.ticketId}</p>}
+              {scanResult.checkedInAt && <p className="text-white/54">Time: {new Date(scanResult.checkedInAt).toLocaleString()}</p>}
+              {scanResult.gateName && <p className="text-white/54">Gate: {scanResult.gateName}</p>}
             </div>
           ) : null}
           <div className="grid grid-cols-2 gap-3">
             {["Allow Entry", "Deny Entry", "Manual Lookup", "Report Issue"].map((button) => (
-              <button key={button} type="button" onClick={() => markDecision(`${button} recorded for this scanner session.`)} className="rounded-2xl border border-white/10 bg-white/8 px-4 py-3 font-bold hover:bg-white/14">{button}</button>
+              <button key={button} type="button" onClick={() => markDecision(`${button} recorded for this scanner session.`)} className="rounded-2xl border border-white/10 bg-white/8 px-4 py-3 font-bold hover:bg-white/14 transition-all active:scale-[0.98]">{button}</button>
             ))}
           </div>
         </section>
