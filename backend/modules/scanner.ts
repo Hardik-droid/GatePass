@@ -1,12 +1,16 @@
 import { createId, nowIso } from "../core/ids";
-import { getStore } from "../core/store";
+import { getStore, saveStore } from "../core/store";
 import { getTicket } from "./tickets";
 import { recordAudit } from "./audit";
 import { verifyQrToken } from "./qr-service";
 
+function normalizeScannerToken(value: unknown) {
+  return String(value ?? "").trim().replace(/\s+/g, "");
+}
+
 export function validateScan(payload: Record<string, unknown>) {
   const store = getStore();
-  const token = String(payload.qrToken ?? payload.ticketId ?? "");
+  const token = normalizeScannerToken(payload.qrToken ?? payload.ticketId);
   const verified = payload.qrToken ? verifyQrToken(token) : { valid: Boolean(token), ticketId: token };
   const ticket = getTicket(verified.ticketId || token) ?? store.tickets.find((entry) => entry.qrToken === token);
   if (!ticket || !verified.valid) return { status: "INVALID", message: "Ticket not found" };
@@ -36,5 +40,6 @@ export function validateScan(payload: Record<string, unknown>) {
     scanTime: timestamp,
   });
   recordAudit({ action: "wallet.qr.scanned", entityType: "tickets", entityId: ticket.id, newValue: { result: "VALID", deviceId: payload.deviceId } });
+  saveStore();
   return { status: "VALID", ticketId: ticket.id, checkedInAt: timestamp, gateName: "Main Gate", message: "Entry allowed" };
 }

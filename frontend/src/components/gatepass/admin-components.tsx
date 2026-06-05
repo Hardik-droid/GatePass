@@ -214,6 +214,11 @@ export function ScannerResult({
   state = "VALID",
   ticketId,
   attendeeName,
+  attendeeEmail,
+  rollNo,
+  hostelName,
+  eventId,
+  ticketStatus,
   category,
   payment,
   checkedInTime,
@@ -222,6 +227,11 @@ export function ScannerResult({
   state?: ScanResultState;
   ticketId?: string;
   attendeeName?: string;
+  attendeeEmail?: string;
+  rollNo?: string;
+  hostelName?: string;
+  eventId?: string;
+  ticketStatus?: string;
   category?: string;
   payment?: string;
   checkedInTime?: string;
@@ -234,6 +244,18 @@ export function ScannerResult({
     ? new Date(checkedInTime).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) 
     : (state === "VALID" ? "Now" : "6:42 PM");
   const displayGate = gateName || "Main Gate / SCN-01";
+  const resultRows: Array<[string, string]> = [
+    ["Attendee", displayAttendee],
+    ...(attendeeEmail ? [["Email", attendeeEmail] as [string, string]] : []),
+    ...(rollNo ? [["Roll No", rollNo] as [string, string]] : []),
+    ...(hostelName ? [["Hostel", hostelName] as [string, string]] : []),
+    ...(eventId ? [["Event", eventId] as [string, string]] : []),
+    ["Category", displayCategory],
+    ["Payment", displayPayment],
+    ...(ticketStatus ? [["Ticket status", ticketStatus] as [string, string]] : []),
+    ["Checked-in time", displayTime],
+    ["Gate/device", displayGate],
+  ];
 
   return (
     <div className="rounded-[30px] border border-white/12 bg-white/[0.06] p-5">
@@ -242,13 +264,7 @@ export function ScannerResult({
         {state === "VALID" ? <CheckCircle2 className="h-8 w-8 text-emerald-300" /> : <AlertTriangle className="h-8 w-8 text-amber-300" />}
       </div>
       <div className="mt-6 grid gap-3 text-sm">
-        {[
-          ["Attendee", displayAttendee],
-          ["Category", displayCategory],
-          ["Payment", displayPayment],
-          ["Checked-in time", displayTime],
-          ["Gate/device", displayGate],
-        ].map(([label, value]) => (
+        {resultRows.map(([label, value]) => (
           <div key={label} className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 rounded-2xl bg-black/24 px-4 py-3">
             <span className="text-white/52 text-xs sm:text-sm">{label}</span>
             <strong className="text-left sm:text-right text-sm font-bold max-w-full sm:max-w-[240px] text-white" style={{ overflowWrap: "anywhere" }}>{value}</strong>

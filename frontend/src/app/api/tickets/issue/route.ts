@@ -44,7 +44,7 @@ export async function POST(req: Request) {
       ticketId,
       userId: studentDoc._id,
       email: studentDoc.email,
-      rNo: studentDoc.rNo,
+      rNo: studentDoc.rNo ?? studentDoc.rNO,
       hName: studentDoc.hName,
       eventId,
       tokenHash,

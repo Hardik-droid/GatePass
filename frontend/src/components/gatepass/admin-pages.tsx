@@ -6,6 +6,53 @@ import { AppShell, AttendanceChart, AuditTimeline, EmptyState, MapPanel, Metrics
 import { auditEvents, ticketCategories } from "@/lib/mock-data";
 import { QRScanner } from "@/components/gatepass/qr-scanner";
 
+type ScannerDisplayResult = {
+  status?: string;
+  message?: string;
+  ticketId?: string;
+  attendeeName?: string;
+  attendeeEmail?: string;
+  rollNo?: string;
+  hostelName?: string;
+  eventId?: string;
+  ticketStatus?: string;
+  category?: string;
+  payment?: string;
+  checkedInAt?: string;
+  gateName?: string;
+};
+
+type MongoTicketPayload = {
+  ticketId?: string;
+  email?: string;
+  rNo?: string | number;
+  hName?: string;
+  eventId?: string;
+  status?: string;
+  usedAt?: string;
+  usedByScanner?: string;
+};
+
+function mapMongoTicketToResult(
+  ticket: MongoTicketPayload | null | undefined,
+  fallback: Partial<ScannerDisplayResult>,
+): ScannerDisplayResult {
+  return {
+    ...fallback,
+    ticketId: ticket?.ticketId || fallback.ticketId,
+    attendeeName: ticket?.email || fallback.attendeeName || "Attendee",
+    attendeeEmail: ticket?.email,
+    rollNo: ticket?.rNo == null ? undefined : String(ticket.rNo),
+    hostelName: ticket?.hName,
+    eventId: ticket?.eventId,
+    ticketStatus: ticket?.status,
+    category: fallback.category || "Student Ticket",
+    payment: fallback.payment || "Paid",
+    checkedInAt: ticket?.usedAt || fallback.checkedInAt,
+    gateName: ticket?.usedByScanner || fallback.gateName || "Main Gate",
+  };
+}
+
 export function DashboardOverview() {
   return (
     <AppShell title="Control Room">
@@ -280,7 +327,7 @@ export function MatrixPage({ title, items }: { title: string; items: string[] })
 
 export function ScannerPageUI({ manual = false }: { manual?: boolean }) {
   const [qrToken, setQrToken] = useState("");
-  const [scanResult, setScanResult] = useState<Record<string, string> | null>(null);
+  const [scanResult, setScanResult] = useState<ScannerDisplayResult | null>(null);
   const [message, setMessage] = useState("");
   const [isCameraScanner, setIsCameraScanner] = useState(!manual);
 
@@ -300,25 +347,28 @@ export function ScannerPageUI({ manual = false }: { manual?: boolean }) {
 
   // Helper to extract token from URL or raw text
   function extractToken(scannedText: string): string {
+    const trimmed = scannedText.trim();
+    const compact = trimmed.replace(/\s+/g, "");
+
     try {
-      if (scannedText.startsWith("http://") || scannedText.startsWith("https://")) {
-        const url = new URL(scannedText);
+      if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+        const url = new URL(trimmed);
         const token = url.searchParams.get("token");
-        if (token) return token;
+        if (token) return token.replace(/\s+/g, "");
 
         const pathParts = url.pathname.split("/");
         const passIndex = pathParts.indexOf("pass");
         if (passIndex !== -1 && pathParts[passIndex + 1]) {
-          return pathParts[passIndex + 1];
+          return pathParts[passIndex + 1].replace(/\s+/g, "");
         }
 
         const gp1Part = pathParts.find(p => p.startsWith("GP1.") || p.includes("GP1."));
-        if (gp1Part) return gp1Part;
+        if (gp1Part) return gp1Part.replace(/\s+/g, "");
       }
     } catch (e) {
       // Ignore URL parsing errors
     }
-    return scannedText;
+    return compact;
   }
 
   async function handleScan(rawScannedText: string) {
@@ -342,16 +392,11 @@ export function ScannerPageUI({ manual = false }: { manual?: boolean }) {
         });
         const payload = await response.json();
         if (payload.ok) {
-          setScanResult({
+          setScanResult(mapMongoTicketToResult(payload.ticket, {
             status: "VALID",
             message: "Entry allowed. Ticket validated successfully.",
-            ticketId: payload.ticket?.ticketId || "unknown",
-            attendeeName: payload.ticket?.email || "Attendee",
-            category: "Student Ticket",
-            payment: "Paid",
-            checkedInAt: payload.ticket?.usedAt || new Date().toISOString(),
-            gateName: "Main Gate",
-          });
+            checkedInAt: new Date().toISOString(),
+          }));
           setMessage("Scan successful! Ticket checked in.");
         } else {
           // Map MongoDB error states to ScannerResult states
@@ -362,11 +407,11 @@ export function ScannerPageUI({ manual = false }: { manual?: boolean }) {
             mappedStatus = "EXPIRED";
           }
 
-          setScanResult({
+          setScanResult(mapMongoTicketToResult(payload.ticket, {
             status: mappedStatus,
             message: `Scan rejected: ${payload.reason || "Invalid ticket"}`,
             ticketId: "unknown",
-          });
+          }));
           setMessage(`Rejected: ${payload.reason || "Invalid ticket"}`);
         }
       } catch (err) {
@@ -610,6 +655,11 @@ export function ScannerPageUI({ manual = false }: { manual?: boolean }) {
             state={(scanResult?.status as never) || (manual ? "ALREADY USED" : "VALID")} 
             ticketId={scanResult?.ticketId}
             attendeeName={scanResult?.attendeeName}
+            attendeeEmail={scanResult?.attendeeEmail}
+            rollNo={scanResult?.rollNo}
+            hostelName={scanResult?.hostelName}
+            eventId={scanResult?.eventId}
+            ticketStatus={scanResult?.ticketStatus}
             category={scanResult?.category}
             payment={scanResult?.payment}
             checkedInTime={scanResult?.checkedInAt}

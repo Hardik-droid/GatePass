@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { createId, nowIso } from "./ids";
 
 export type Store = ReturnType<typeof createStore>;
@@ -47,6 +49,8 @@ type UserWalletPreferenceRow = {
   walletAutoPromptSeen: boolean;
   walletLastSelectedAt?: string;
 };
+
+const STORE_FILE = path.join(process.cwd(), ".gatepass-store.json");
 
 function createStore() {
   const organizationId = "org_demo";
@@ -111,9 +115,40 @@ function createStore() {
   };
 }
 
+function persistableStore(store: Store) {
+  return {
+    ...store,
+    idempotency: undefined,
+  };
+}
+
+function loadStoreFromDisk(): Store | null {
+  try {
+    if (!fs.existsSync(STORE_FILE)) {
+      return null;
+    }
+
+    const parsed = JSON.parse(fs.readFileSync(STORE_FILE, "utf8")) as Partial<Store>;
+    const fresh = createStore();
+
+    return {
+      ...fresh,
+      ...parsed,
+      idempotency: new Map<string, unknown>(),
+    };
+  } catch {
+    return null;
+  }
+}
+
 const globalStore = globalThis as typeof globalThis & { __gatepassStore?: Store };
 
 export function getStore() {
-  globalStore.__gatepassStore ??= createStore();
+  globalStore.__gatepassStore ??= loadStoreFromDisk() ?? createStore();
   return globalStore.__gatepassStore;
+}
+
+export function saveStore() {
+  const store = getStore();
+  fs.writeFileSync(STORE_FILE, JSON.stringify(persistableStore(store), null, 2));
 }

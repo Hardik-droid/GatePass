@@ -5,6 +5,34 @@ import { hashToken, verifyQrPayload } from "@/lib/qrToken";
 
 export const runtime = "nodejs";
 
+type TicketDoc = {
+  ticketId?: unknown;
+  email?: unknown;
+  rNo?: unknown;
+  hName?: unknown;
+  eventId?: unknown;
+  status?: unknown;
+  usedAt?: unknown;
+  usedByScanner?: unknown;
+  expiresAt?: unknown;
+  scanCount?: unknown;
+};
+
+function serializeTicket(ticket: TicketDoc) {
+  return {
+    ticketId: String(ticket.ticketId || ""),
+    email: String(ticket.email || ""),
+    rNo: ticket.rNo,
+    hName: String(ticket.hName || ""),
+    eventId: String(ticket.eventId || ""),
+    status: String(ticket.status || ""),
+    usedAt: ticket.usedAt || null,
+    usedByScanner: ticket.usedByScanner || null,
+    expiresAt: ticket.expiresAt || null,
+    scanCount: ticket.scanCount || 0,
+  };
+}
+
 export async function POST(req: Request) {
   try {
     await connectDB();
@@ -60,33 +88,28 @@ export async function POST(req: Request) {
         ticketId: parsed.ticketId,
       }).lean();
 
-      const existingDoc = existing as Record<string, unknown> | null;
+      const existingDoc = existing as TicketDoc | null;
+      const isExpired =
+        existingDoc?.status === "active" &&
+        existingDoc.expiresAt instanceof Date &&
+        existingDoc.expiresAt <= new Date();
 
       return NextResponse.json(
         {
           ok: false,
-          reason: existingDoc
-            ? `ticket_${existingDoc.status}`
-            : "ticket_not_found",
+          reason: existingDoc ? (isExpired ? "ticket_expired" : `ticket_${existingDoc.status}`) : "ticket_not_found",
+          ticket: existingDoc ? serializeTicket(existingDoc) : null,
         },
         { status: 403 },
       );
     }
 
-    const ticketDoc = ticket as Record<string, unknown>;
+    const ticketDoc = ticket as TicketDoc;
 
     return NextResponse.json({
       ok: true,
       status: "accepted",
-      ticket: {
-        ticketId: ticketDoc.ticketId,
-        email: ticketDoc.email,
-        rNo: ticketDoc.rNo,
-        hName: ticketDoc.hName,
-        eventId: ticketDoc.eventId,
-        usedAt: ticketDoc.usedAt,
-        usedByScanner: ticketDoc.usedByScanner,
-      },
+      ticket: serializeTicket(ticketDoc),
     });
   } catch (error) {
     console.error("SCAN_TICKET_ERROR:", error);

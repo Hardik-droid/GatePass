@@ -1,5 +1,5 @@
 import { createId } from "../core/ids";
-import { getStore } from "../core/store";
+import { getStore, saveStore } from "../core/store";
 import { queueNotification } from "./notifications";
 import { createSecureQrToken, hashQrToken } from "./qr-service";
 import { prepareWalletPasses } from "./wallet-service";
@@ -31,6 +31,7 @@ export function getOrder(id: string) {
 export function createOrder(payload: Record<string, unknown>) {
   const order = { id: createId("ord"), status: "created", ...payload };
   getStore().orders.push(order);
+  saveStore();
   return { order };
 }
 
@@ -79,17 +80,20 @@ export function handleManualOrder(orderId: string) {
       return ticket;
     }),
   );
+  saveStore();
   return { order, tickets, rawTokens };
 }
 
 export function markOrderPaid(id: string) {
   const order = getOrder(id);
   if (order) order.status = "paid";
+  if (order) saveStore();
   return order;
 }
 
 export function markOrderFailed(id: string) {
   const order = getOrder(id);
   if (order) order.status = "failed";
+  if (order) saveStore();
   return order;
 }
