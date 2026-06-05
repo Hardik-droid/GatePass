@@ -249,9 +249,9 @@ export function ScannerResult({
           ["Checked-in time", displayTime],
           ["Gate/device", displayGate],
         ].map(([label, value]) => (
-          <div key={label} className="flex justify-between rounded-2xl bg-black/24 px-4 py-3">
-            <span className="text-white/52">{label}</span>
-            <strong className="max-w-[200px] truncate">{value}</strong>
+          <div key={label} className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 rounded-2xl bg-black/24 px-4 py-3">
+            <span className="text-white/52 text-xs sm:text-sm">{label}</span>
+            <strong className="text-left sm:text-right text-sm font-bold max-w-full sm:max-w-[240px] text-white" style={{ overflowWrap: "anywhere" }}>{value}</strong>
           </div>
         ))}
       </div>

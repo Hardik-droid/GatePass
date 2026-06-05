@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppShell, AttendanceChart, AuditTimeline, EmptyState, MapPanel, MetricsGrid, OrdersTable, RevenueChart, ScannerResult, StatusBadge, TicketLifecycle } from "@/components/gatepass/admin-components";
 import { auditEvents, ticketCategories } from "@/lib/mock-data";
 import { QRScanner } from "@/components/gatepass/qr-scanner";
@@ -284,6 +284,20 @@ export function ScannerPageUI({ manual = false }: { manual?: boolean }) {
   const [message, setMessage] = useState("");
   const [isCameraScanner, setIsCameraScanner] = useState(!manual);
 
+  // Hook to set body/html background to full black on the scanner page
+  useEffect(() => {
+    const originalBodyBg = document.body.style.background;
+    const originalHtmlBg = document.documentElement.style.background;
+
+    document.body.style.background = "#000000";
+    document.documentElement.style.background = "#000000";
+
+    return () => {
+      document.body.style.background = originalBodyBg;
+      document.documentElement.style.background = originalHtmlBg;
+    };
+  }, []);
+
   // Helper to extract token from URL or raw text
   function extractToken(scannedText: string): string {
     try {
@@ -297,6 +311,9 @@ export function ScannerPageUI({ manual = false }: { manual?: boolean }) {
         if (passIndex !== -1 && pathParts[passIndex + 1]) {
           return pathParts[passIndex + 1];
         }
+
+        const gp1Part = pathParts.find(p => p.startsWith("GP1.") || p.includes("GP1."));
+        if (gp1Part) return gp1Part;
       }
     } catch (e) {
       // Ignore URL parsing errors
@@ -304,8 +321,9 @@ export function ScannerPageUI({ manual = false }: { manual?: boolean }) {
     return scannedText;
   }
 
-  async function handleScan(scannedText: string) {
-    if (!scannedText) return;
+  async function handleScan(rawScannedText: string) {
+    if (!rawScannedText) return;
+    const scannedText = extractToken(rawScannedText.trim());
     setQrToken(scannedText);
     setMessage("Processing scanned QR...");
 
@@ -435,12 +453,13 @@ export function ScannerPageUI({ manual = false }: { manual?: boolean }) {
       setMessage("Enter a ticket, phone, name, order, or token to search.");
       return;
     }
+    const token = extractToken(qrToken.trim());
     setMessage("Searching database...");
     try {
       const response = await fetch("/api/scanner/manual-lookup", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ query: qrToken }),
+        body: JSON.stringify({ query: token }),
       });
       const payload = await response.json();
       if (payload.items?.length) {
@@ -476,12 +495,12 @@ export function ScannerPageUI({ manual = false }: { manual?: boolean }) {
   }
 
   return (
-    <main className="min-h-screen bg-black px-4 py-8 text-white md:px-8">
+    <main className="min-h-screen bg-black px-4 py-8 text-white md:px-8 max-w-full overflow-hidden">
       <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[1fr_420px]">
-        <section>
+        <section className="w-full overflow-hidden">
           <div className="flex flex-col gap-2">
             <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--gp-champagne)]">Mobile web scanner</p>
-            <h1 className="font-serif text-6xl">{isCameraScanner ? "Scanner" : "Manual Lookup"}</h1>
+            <h1 className="font-serif text-6xl break-words">{isCameraScanner ? "Scanner" : "Manual Lookup"}</h1>
             
             {/* Toggle bar between scanner modes */}
             <div className="mt-4 flex gap-2">
@@ -510,32 +529,58 @@ export function ScannerPageUI({ manual = false }: { manual?: boolean }) {
             </div>
           </div>
 
-          <div className="mt-8 rounded-[32px] border border-white/10 bg-white/[0.055] p-4">
+          <div className="mt-8 rounded-[32px] border border-white/10 bg-white/[0.055] p-4 w-full">
             {/* Scan Area */}
             {isCameraScanner ? (
-              <div className="w-full aspect-square rounded-[24px] overflow-hidden border border-white/10 p-1 bg-black animate-[fadeIn_0.5s_ease-out]">
+              <div className="w-full max-w-md mx-auto aspect-square rounded-[24px] overflow-hidden border border-white/10 p-1 bg-black animate-[fadeIn_0.5s_ease-out]">
                 <QRScanner onScan={handleScan} isScanningActive={isCameraScanner} />
               </div>
             ) : (
-              <div className="flex aspect-square items-center justify-center rounded-[28px] border border-dashed border-white/20 bg-[radial-gradient(circle_at_50%_50%,rgba(125,255,60,.12),transparent_28%),#050505] p-6 text-center">
+              <div className="flex aspect-square max-w-md mx-auto items-center justify-center rounded-[28px] border border-dashed border-white/20 bg-[radial-gradient(circle_at_50%_50%,rgba(125,255,60,.12),transparent_28%),#050505] p-6 text-center">
                 <span className="text-sm font-black uppercase tracking-[0.18em] text-white/40">
                   Search by ticket ID, phone, name, email, or token in fields below
                 </span>
               </div>
             )}
 
+            {/* Manual Text Lookup Fallback directly under camera/scan block */}
+            {isCameraScanner && (
+              <div className="mt-6 pt-6 border-t border-white/10 w-full">
+                <span className="text-xs font-black uppercase tracking-[0.14em] text-[var(--gp-champagne)] block mb-2">
+                  Or Enter Ticket ID/Token Manually (Fallback)
+                </span>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={qrToken}
+                    onChange={(event) => setQrToken(event.target.value)}
+                    placeholder="Enter ticket ID, email, or token..."
+                    className="flex-1 rounded-xl border border-white/10 bg-black/50 px-4 py-2 text-sm outline-none text-white focus:border-[var(--gp-champagne)]/40 focus:bg-black/70 transition-all min-w-0"
+                  />
+                  <button
+                    type="button"
+                    onClick={submitManualLookup}
+                    className="rounded-xl bg-white/10 px-4 py-2 text-xs font-bold text-white hover:bg-white/16 transition-all active:scale-[0.98] whitespace-nowrap"
+                  >
+                    Lookup
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Input fields */}
-            <label className="mt-4 grid gap-2">
+            <label className="mt-4 grid gap-2 w-full">
               <span className="text-xs font-black uppercase tracking-[0.14em] text-white/48">Scanned Payload / Token</span>
               <textarea 
                 value={qrToken} 
                 onChange={(event) => setQrToken(event.target.value)} 
-                className="min-h-24 rounded-2xl border border-white/10 bg-black/50 px-4 py-3 text-sm outline-none text-white focus:border-[var(--gp-champagne)]/40 focus:bg-black/70 transition-all" 
+                className="min-h-24 w-full rounded-2xl border border-white/10 bg-black/50 px-4 py-3 text-sm outline-none text-white focus:border-[var(--gp-champagne)]/40 focus:bg-black/70 transition-all" 
                 placeholder={isCameraScanner ? "Scanned QR data will populate here automatically..." : "Paste signed QR token, ticket ID, name, email..."} 
+                style={{ overflowWrap: "anywhere" }}
               />
             </label>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div className="mt-4 grid gap-3 md:grid-cols-2 w-full">
               <button 
                 type="button" 
                 onClick={submitScan} 
@@ -553,14 +598,14 @@ export function ScannerPageUI({ manual = false }: { manual?: boolean }) {
             </div>
 
             {message ? (
-              <p className="mt-3 rounded-2xl bg-white/10 px-4 py-3 text-sm font-bold text-white/70 transition-all border border-white/5 animate-pulse">
+              <p className="mt-3 rounded-2xl bg-white/10 px-4 py-3 text-sm font-bold text-white/70 transition-all border border-white/5 animate-pulse" style={{ overflowWrap: "anywhere" }}>
                 {message}
               </p>
             ) : null}
           </div>
         </section>
 
-        <section className="grid gap-4">
+        <section className="grid gap-4 w-full overflow-hidden">
           <ScannerResult 
             state={(scanResult?.status as never) || (manual ? "ALREADY USED" : "VALID")} 
             ticketId={scanResult?.ticketId}
@@ -571,14 +616,14 @@ export function ScannerPageUI({ manual = false }: { manual?: boolean }) {
             gateName={scanResult?.gateName}
           />
           {scanResult ? (
-            <div className="rounded-2xl border border-white/10 bg-white/8 p-4 text-sm backdrop-blur-md">
-              <p className="font-bold text-emerald-300">{scanResult.message}</p>
-              {scanResult.ticketId && <p className="mt-2 text-white/54">Ticket ID: {scanResult.ticketId}</p>}
+            <div className="rounded-2xl border border-white/10 bg-white/8 p-4 text-sm backdrop-blur-md" style={{ overflowWrap: "anywhere" }}>
+              <p className="font-bold text-emerald-300" style={{ overflowWrap: "anywhere" }}>{scanResult.message}</p>
+              {scanResult.ticketId && <p className="mt-2 text-white/54" style={{ overflowWrap: "anywhere" }}>Ticket ID: {scanResult.ticketId}</p>}
               {scanResult.checkedInAt && <p className="text-white/54">Time: {new Date(scanResult.checkedInAt).toLocaleString()}</p>}
               {scanResult.gateName && <p className="text-white/54">Gate: {scanResult.gateName}</p>}
             </div>
           ) : null}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 w-full">
             {["Allow Entry", "Deny Entry", "Manual Lookup", "Report Issue"].map((button) => (
               <button key={button} type="button" onClick={() => markDecision(`${button} recorded for this scanner session.`)} className="rounded-2xl border border-white/10 bg-white/8 px-4 py-3 font-bold hover:bg-white/14 transition-all active:scale-[0.98]">{button}</button>
             ))}

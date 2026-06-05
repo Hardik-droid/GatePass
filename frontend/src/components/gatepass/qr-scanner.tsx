@@ -21,6 +21,7 @@ export function QRScanner({ onScan, isScanningActive = true }: QRScannerProps) {
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [isFrontFacing, setIsFrontFacing] = useState(false);
 
   // Play audio beep
   function playBeep() {
@@ -44,16 +45,18 @@ export function QRScanner({ onScan, isScanningActive = true }: QRScannerProps) {
     }
   }
 
-  // List available video input devices
-  useEffect(() => {
-    async function getDevices() {
-      try {
-        const mediaDevices = await navigator.mediaDevices.enumerateDevices();
-        const videoDevices = mediaDevices.filter((device) => device.kind === "videoinput");
-        setDevices(videoDevices);
+  // Update available video input devices list
+  async function updateDeviceList(currentSelectedId?: string) {
+    try {
+      const mediaDevices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = mediaDevices.filter((device) => device.kind === "videoinput");
+      setDevices(videoDevices);
 
-        if (videoDevices.length > 0) {
-          // Look for back camera on mobile
+      if (videoDevices.length > 0) {
+        const activeId = currentSelectedId || selectedDeviceId;
+        const exists = videoDevices.some((d) => d.deviceId === activeId);
+        if (!exists) {
+          // Look for back camera on mobile by default
           const backCamera = videoDevices.find(
             (device) =>
               device.label.toLowerCase().includes("back") ||
@@ -61,13 +64,16 @@ export function QRScanner({ onScan, isScanningActive = true }: QRScannerProps) {
           );
           setSelectedDeviceId(backCamera?.deviceId || videoDevices[0].deviceId);
         }
-      } catch (err) {
-        console.error("Error enumerating devices:", err);
       }
+    } catch (err) {
+      console.error("Error enumerating devices:", err);
     }
+  }
 
+  // List available video input devices initially
+  useEffect(() => {
     if (typeof window !== "undefined" && navigator.mediaDevices) {
-      getDevices();
+      updateDeviceList("");
     }
   }, []);
 
@@ -93,7 +99,7 @@ export function QRScanner({ onScan, isScanningActive = true }: QRScannerProps) {
       const constraints: MediaStreamConstraints = {
         video: {
           deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined,
-          facingMode: "environment",
+          facingMode: { ideal: "environment" },
           width: { ideal: 1280 },
           height: { ideal: 720 },
         },
@@ -102,11 +108,30 @@ export function QRScanner({ onScan, isScanningActive = true }: QRScannerProps) {
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
 
+      // Update the device list with labels now that user granted camera permission
+      await updateDeviceList(selectedDeviceId);
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.setAttribute("playsinline", "true"); // required for iOS safari
         videoRef.current.play();
         setIsCameraActive(true);
+
+        // Detect if active video track is front-facing (user camera)
+        const videoTrack = stream.getVideoTracks()[0];
+        if (videoTrack) {
+          const settings = videoTrack.getSettings();
+          const trackLabel = videoTrack.label || "";
+          const isUser =
+            settings.facingMode === "user" ||
+            trackLabel.toLowerCase().includes("front") ||
+            trackLabel.toLowerCase().includes("user") ||
+            trackLabel.toLowerCase().includes("selfie");
+          setIsFrontFacing(isUser);
+        } else {
+          setIsFrontFacing(false);
+        }
+
         animationFrameRef.current = requestAnimationFrame(tick);
       }
     } catch (err: any) {
@@ -129,12 +154,14 @@ export function QRScanner({ onScan, isScanningActive = true }: QRScannerProps) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
     setIsCameraActive(false);
   }
 
   function tick() {
-    if (!videoRef.current || !canvasRef.current) {
-      animationFrameRef.current = requestAnimationFrame(tick);
+    if (!streamRef.current || !videoRef.current || !canvasRef.current) {
       return;
     }
 
@@ -170,7 +197,9 @@ export function QRScanner({ onScan, isScanningActive = true }: QRScannerProps) {
       }
     }
 
-    animationFrameRef.current = requestAnimationFrame(tick);
+    if (streamRef.current && videoRef.current && canvasRef.current) {
+      animationFrameRef.current = requestAnimationFrame(tick);
+    }
   }
 
   function drawBoundingBox(
@@ -196,19 +225,14 @@ export function QRScanner({ onScan, isScanningActive = true }: QRScannerProps) {
   return (
     <div className="relative flex flex-col items-center justify-between w-full h-full overflow-hidden bg-black p-2">
       {/* Hidden Video element used for camera feed */}
-      <video
-        ref={videoRef}
-        className="hidden"
-        playsInline
-        muted
-      />
+      <video ref={videoRef} className="hidden" playsInline muted />
 
       {/* Main Canvas rendering camera stream + overlays */}
       <div className="relative w-full aspect-square overflow-hidden rounded-[20px] bg-[#050505] shadow-[inset_0_0_80px_rgba(0,0,0,0.8)] border border-white/10">
         {isCameraActive ? (
           <canvas
             ref={canvasRef}
-            className="w-full h-full object-cover scale-x-[-1]" // mirror effect for intuitive usage
+            className={`w-full h-full object-cover ${isFrontFacing ? "scale-x-[-1]" : ""}`}
           />
         ) : (
           <div className="flex flex-col items-center justify-center w-full h-full p-6 text-center text-white/50">
