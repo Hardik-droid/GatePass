@@ -120,7 +120,7 @@ export function issueTicketsForPaidOrder(orderId: string) {
 }
 
 export function handleManualOrder(orderId: string) {
-  if (process.env.NODE_ENV === "production" || (!isDevAuthEnabled() && process.env.NEXT_PUBLIC_ENABLE_DEV_PAYMENT_SIMULATOR !== "true")) {
+  if (!isDevAuthEnabled() && process.env.NEXT_PUBLIC_ENABLE_DEV_PAYMENT_SIMULATOR !== "true") {
     throw new HttpError(403, "Manual payment confirmation is disabled");
   }
   const store = getStore();

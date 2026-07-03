@@ -15,7 +15,7 @@ export async function GET(
 
     // In dev mode allow QR generation for any valid ticket (same posture as manual-confirm).
     // In production always enforce session ownership.
-    if (process.env.NODE_ENV !== "production" && isDevAuthEnabled()) {
+    if (isDevAuthEnabled()) {
       const session = await getSession();
       if (!session) {
         // Unauthenticated dev request: allow QR if ticket exists (just booked flow)
