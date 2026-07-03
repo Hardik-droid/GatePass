@@ -39,7 +39,7 @@ export async function GET(
     return NextResponse.redirect(data.url);
   }
 
-  if (process.env.NODE_ENV === "production" || process.env.NEXT_PUBLIC_ENABLE_DEV_AUTH !== "true") {
+  if (process.env.NEXT_PUBLIC_ENABLE_DEV_AUTH !== "true") {
     return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent("Authentication provider is not configured")}`, request.url));
   }
 

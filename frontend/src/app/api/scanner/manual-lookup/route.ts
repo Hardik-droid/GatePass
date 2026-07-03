@@ -7,7 +7,6 @@ import { isDevAuthEnabled } from "@/utils/supabase/env";
 export async function POST(request: NextRequest) {
   return withErrorHandling(async () => {
     const devOverride =
-      process.env.NODE_ENV !== "production" &&
       isDevAuthEnabled() &&
       request.headers.get("x-gatepass-role")?.toUpperCase() === "OWNER";
 

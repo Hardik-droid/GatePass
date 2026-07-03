@@ -10,7 +10,7 @@ function safeRedirect(value?: string) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!isDevAuthEnabled() || process.env.NODE_ENV === "production") {
+  if (!isDevAuthEnabled()) {
     return NextResponse.json({ message: "Dev auth is disabled" }, { status: 403 });
   }
 

@@ -15,7 +15,6 @@ export async function POST(request: NextRequest) {
     // In dev mode, accept x-gatepass-role: OWNER header for scanner access
     // (allows scanner page to work without a real login session)
     const devOverride =
-      process.env.NODE_ENV !== "production" &&
       isDevAuthEnabled() &&
       request.headers.get("x-gatepass-role")?.toUpperCase() === "OWNER";
 

@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       return response;
     }
 
-    if (process.env.NODE_ENV === "production" || process.env.NEXT_PUBLIC_ENABLE_DEV_AUTH !== "true") {
+    if (process.env.NEXT_PUBLIC_ENABLE_DEV_AUTH !== "true") {
       return NextResponse.json({ message: "Authentication provider is not configured" }, { status: 503 });
     }
 

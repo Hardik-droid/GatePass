@@ -5,7 +5,7 @@ import { isDevAuthEnabled } from "@/utils/supabase/env";
 
 export default async function ScannerPage() {
   const session = await getServerSession();
-  const devMode = isDevAuthEnabled() && process.env.NODE_ENV !== "production";
+  const devMode = isDevAuthEnabled();
 
   // In dev mode allow any session (or even no session) to access the scanner
   if (!devMode) {
