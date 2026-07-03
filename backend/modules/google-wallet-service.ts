@@ -37,7 +37,7 @@ export function createOrUpdateEventTicketObject(ticketId: string, token: string)
   const object = {
     id: objectId,
     classId: classObject.id,
-    state: ticket.status === "issued" ? "ACTIVE" : "INACTIVE",
+    state: ["active", "issued"].includes(String(ticket.status)) ? "ACTIVE" : "INACTIVE",
     ticketHolderName: ticket.attendeeName,
     ticketNumber: ticket.id,
     barcode: {

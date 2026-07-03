@@ -1,19 +1,25 @@
 import { PassClient } from "@/components/gatepass/pass-client";
-import { getStore } from "@/backend/core/store";
+import { ensureStoreReady } from "@/backend/core/store";
 import { getTicket } from "@/backend/modules/tickets";
+import { canAccessTicket } from "@/backend/modules/auth";
+import { getServerSession } from "@/authO/lib/server/session";
+import { redirect } from "next/navigation";
 
 export default async function PassPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ token?: string }>;
 }) {
+  const session = await getServerSession();
+  if (!session) redirect("/login?redirect=/app");
   const { id } = await params;
-  const { token = "" } = await searchParams;
   const ticket = getTicket(id);
+  if (ticket && !canAccessTicket(session, ticket)) {
+    redirect("/app");
+  }
+  const store = await ensureStoreReady();
   const event = ticket
-    ? getStore().events.find((entry) => entry.id === ticket.eventId)
+    ? store.events.find((entry) => entry.id === ticket.eventId)
     : undefined;
 
   return (
@@ -21,7 +27,6 @@ export default async function PassPage({
       <div className="mx-auto max-w-xl">
         <PassClient
           ticketId={id}
-          token={token}
           eventTitle={event?.title ?? "GatePass event"}
           attendeeName={ticket?.attendeeName ?? "Attendee"}
           status={ticket?.status ?? "issued"}

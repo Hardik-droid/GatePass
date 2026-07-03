@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { Bell, MapPinned, ShieldCheck } from "lucide-react";
 import { StatusBadge } from "@/components/gatepass/admin-components";
 import { LogoutButton } from "@/components/gatepass/logout-button";
-import { getStore } from "@/backend/core/store";
+import { ensureStoreReady } from "@/backend/core/store";
 import { getServerSession } from "@/authO/lib/server/session";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function UserDashboardPage() {
   const session = await getServerSession();
   if (!session) redirect("/login?redirect=/app");
-  const store = getStore();
+  const store = await ensureStoreReady();
   const tickets = store.tickets.filter(
     (ticket) => ticket.attendeeEmail === session.email,
   );

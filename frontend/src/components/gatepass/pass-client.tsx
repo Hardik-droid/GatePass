@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { StatusBadge } from "@/components/gatepass/admin-components";
-import { WalletSmartRedirect } from "@/components/gatepass/wallet-actions";
 
 export function GoogleWalletDirectButton({ ticketId }: { ticketId: string }) {
   const [loading, setLoading] = useState(false);
@@ -25,8 +24,8 @@ export function GoogleWalletDirectButton({ ticketId }: { ticketId: string }) {
       } else {
         throw new Error(data.error || "No saveUrl returned");
       }
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate Google Wallet link");
     } finally {
       setLoading(false);
     }
@@ -40,10 +39,13 @@ export function GoogleWalletDirectButton({ ticketId }: { ticketId: string }) {
         className="transition hover:opacity-90 active:opacity-80 disabled:opacity-50"
         aria-label="Add to Google Wallet"
       >
-        <img 
+        <Image
           src="https://wallet.google/images/branding/en/add_to_google_wallet/black-badge.svg" 
           alt="Add to Google Wallet" 
-          className="h-[48px]"
+          width={180}
+          height={48}
+          className="h-[48px] w-auto"
+          unoptimized
         />
       </button>
       {loading && <p className="mt-2 text-center text-xs font-medium text-gray-500">Preparing Wallet Link...</p>}
@@ -55,13 +57,11 @@ export function GoogleWalletDirectButton({ ticketId }: { ticketId: string }) {
 
 export function PassClient({
   ticketId,
-  token,
   eventTitle,
   attendeeName,
   status,
 }: {
   ticketId: string;
-  token: string;
   eventTitle: string;
   attendeeName: string;
   status: string;
@@ -69,11 +69,10 @@ export function PassClient({
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!token) return;
-    fetch(`/api/tickets/${ticketId}/qr?token=${encodeURIComponent(token)}`)
+    fetch(`/api/tickets/${ticketId}/qr`)
       .then((response) => response.json())
       .then((payload) => setQrDataUrl(payload.qrDataUrl));
-  }, [ticketId, token]);
+  }, [ticketId]);
 
   return (
     <div className="rounded-[32px] border border-[#0a7f8f]/14 bg-white p-5 text-[var(--ink)] shadow-[0_24px_70px_rgba(10,127,143,.1)]">
@@ -91,7 +90,7 @@ export function PassClient({
           <Image src={qrDataUrl} alt="GatePass QR" width={190} height={190} unoptimized />
         ) : (
           <span className="px-5 text-center text-sm font-bold opacity-60">
-            Open this pass from the booking confirmation link to render QR.
+            Sign in with the ticket owner account to render QR.
           </span>
         )}
       </div>
@@ -99,7 +98,7 @@ export function PassClient({
         {[
           ["Ticket ID", ticketId],
           ["Attendee", attendeeName],
-          ["QR", token ? "Signed token" : "Token required"],
+          ["QR", qrDataUrl ? "Ready" : "Protected"],
           ["Status", status],
         ].map(([label, value]) => (
           <div key={label} className="rounded-2xl bg-black/8 p-3">
@@ -115,7 +114,6 @@ export function PassClient({
       </p>
       <div className="mt-5">
         <GoogleWalletDirectButton ticketId={ticketId} />
-        {/* <WalletSmartRedirect ticketId={ticketId} qrToken={token} autoOpen={false} /> */}
       </div>
 
     </div>

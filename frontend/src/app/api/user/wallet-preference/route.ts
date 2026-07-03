@@ -6,14 +6,14 @@ import { getWalletPreference, saveWalletPreference } from "@/backend/modules/wal
 
 export async function GET() {
   return withErrorHandling(async () => {
-    const user = requireUser();
+    const user = await requireUser();
     return getWalletPreference(user.userId);
   });
 }
 
 export async function POST(request: NextRequest) {
   return withErrorHandling(async () => {
-    const user = requireUser();
+    const user = await requireUser();
     const body = await parseJson(request, walletPreferenceSchema);
     return saveWalletPreference(user.userId, body.wallet_preference);
   });

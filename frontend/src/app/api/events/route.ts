@@ -15,7 +15,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   return withErrorHandling(async () => {
-    requireApiPermission(request, "events:write");
+    await requireApiPermission(request, "events:write");
     const payload = await parseJson(request, eventCreateSchema);
     return withIdempotency("event:create", getIdempotencyKey(request), () =>
       createEvent(payload),

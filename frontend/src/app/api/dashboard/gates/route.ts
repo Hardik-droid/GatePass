@@ -5,7 +5,7 @@ import { requireApiPermission } from "@/backend/modules/auth";
 
 export async function GET(request: NextRequest) {
   return withErrorHandling(async () => {
-    requireApiPermission(request, "dashboard:read");
+    await requireApiPermission(request, "dashboard:read");
     return { items: getStore().eventGates };
   });
 }

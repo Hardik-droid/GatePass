@@ -4,7 +4,11 @@ import QRCode from "qrcode";
 const TOKEN_VERSION = "v1";
 
 function signingSecret() {
-  return process.env.QR_SIGNING_SECRET || "gatepass-dev-qr-signing-secret";
+  const secret = process.env.QR_SIGNING_SECRET;
+  if (!secret && process.env.NODE_ENV === "production") {
+    throw new Error("QR_SIGNING_SECRET is required in production");
+  }
+  return secret || "gatepass-dev-qr-signing-secret";
 }
 
 function base64UrlEncode(value: string | Buffer) {
@@ -63,7 +67,12 @@ export function verifyQrToken(token: string) {
       issued_at?: string;
     };
     const expected = signPayload(payload);
-    const valid = crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+    const sigBuf = Buffer.from(signature, "base64url");
+    const expBuf = Buffer.from(expected, "base64url");
+    // timingSafeEqual throws if lengths differ — guard against that
+    const valid =
+      sigBuf.length === expBuf.length &&
+      crypto.timingSafeEqual(sigBuf, expBuf);
     return {
       valid,
       ticketId: valid ? String(payload.ticket_id ?? "") : "",

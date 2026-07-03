@@ -5,7 +5,7 @@ import { getReports } from "@/backend/modules/reports";
 
 export async function GET(request: NextRequest) {
   return withErrorHandling(async () => {
-    requireApiPermission(request, "reports:read");
+    await requireApiPermission(request, "reports:read");
     return { items: getReports().salesRows };
   });
 }

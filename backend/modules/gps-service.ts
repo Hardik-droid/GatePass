@@ -1,17 +1,22 @@
 import { createId, nowIso } from "../core/ids";
-import { getStore } from "../core/store";
+import { getStore, persistStoreRecord, persistStoreUpdate } from "../core/store";
 
 export function createGatepassRequest(payload: Record<string, unknown>) {
-  return { request: { id: createId("gpr"), status: "submitted", createdAt: nowIso(), ...payload } };
+  const request = { id: createId("gpr"), status: "submitted", createdAt: nowIso(), ...payload };
+  void persistStoreRecord("gatepassRequests", request).catch((error) => console.error("Gatepass request persistence failed", error));
+  return { request };
 }
 
 export function approveGatepassRequest(id: string, approved = true) {
-  return { id, status: approved ? "approved" : "rejected", approvedAt: nowIso() };
+  const request = { id, status: approved ? "approved" : "rejected", approvedAt: nowIso() };
+  void persistStoreUpdate("gatepassRequests", request).catch((error) => console.error("Gatepass approval persistence failed", error));
+  return request;
 }
 
 export function logLocation(payload: Record<string, unknown>) {
   const log = { id: createId("gps"), status: "inside", createdAt: nowIso(), ...payload };
   getStore().gpsLocationLogs.unshift(log);
+  void persistStoreRecord("gpsLocationLogs", log).catch((error) => console.error("GPS persistence failed", error));
   return { log };
 }
 

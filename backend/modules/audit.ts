@@ -1,5 +1,5 @@
 import { createId, nowIso } from "../core/ids";
-import { getStore } from "../core/store";
+import { getStore, persistStoreRecord } from "../core/store";
 
 export function listAuditEvents() {
   return getStore().auditEvents;
@@ -19,5 +19,6 @@ export function recordAudit(payload: Record<string, unknown>) {
     entityId: String(payload.entityId ?? "unknown"),
   };
   getStore().auditEvents.unshift(event);
+  void persistStoreRecord("auditEvents", event).catch((error) => console.error("Audit persistence failed", error));
   return event;
 }

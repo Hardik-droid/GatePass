@@ -6,6 +6,7 @@ import {
   withErrorHandling,
 } from "@/backend/core/http";
 import { withIdempotency } from "@/backend/modules/idempotency";
+import { requireApiPermission } from "@/backend/modules/auth";
 import {
   listNotifications,
   queueNotification,
@@ -18,12 +19,16 @@ const notificationSchema = z.object({
   target: z.string().min(3),
 });
 
-export async function GET() {
-  return withErrorHandling(async () => ({ items: listNotifications() }));
+export async function GET(request: NextRequest) {
+  return withErrorHandling(async () => {
+    await requireApiPermission(request, "notifications:read");
+    return { items: listNotifications() };
+  });
 }
 
 export async function POST(request: NextRequest) {
   return withErrorHandling(async () => {
+    await requireApiPermission(request, "notifications:write");
     const payload = await parseJson(request, notificationSchema);
     return withIdempotency(
       "notification:queue",

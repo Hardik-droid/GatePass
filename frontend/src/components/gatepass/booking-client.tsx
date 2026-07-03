@@ -2,8 +2,6 @@
 
 import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
-import Image from "next/image";
-import QRCode from "qrcode";
 import {
   ArrowLeft,
   CreditCard,
@@ -15,12 +13,7 @@ import {
   Check,
   Info,
   Ticket,
-  Percent,
   ChevronDown,
-  LocateFixed,
-  MapPin,
-  ShieldCheck,
-  Crown
 } from "lucide-react";
 import { WalletSmartRedirect } from "@/components/gatepass/wallet-actions";
 import { useSearchParams } from "next/navigation";
@@ -63,74 +56,17 @@ const walletList = [
   { id: "amazon", name: "Amazon Pay", logo: "🟠" },
 ];
 
-function TicketQr({ ticketId, token }: { ticketId: string; token: string }) {
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+type PaymentTab = "upi" | "card" | "wallet" | "voucher" | "netbanking" | "paylater" | "points";
 
-  useEffect(() => {
-    if (!token) return;
-    let active = true;
-    QRCode.toDataURL(token, {
-      errorCorrectionLevel: "M",
-      margin: 1,
-      width: 220,
-      color: {
-        dark: "#0a7f8f",
-        light: "#ffffff",
-      },
-    })
-      .then((url) => {
-        if (active) {
-          setQrDataUrl(url);
-          setLoading(false);
-        }
-      })
-      .catch((err) => {
-        console.error("Error generating QR:", err);
-        if (active) {
-          setLoading(false);
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [token]);
-
-  return (
-    <div className="relative w-36 h-36 flex items-center justify-center">
-      {/* Decorative Green Corners */}
-      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100">
-        <path
-          d="M5,5 h30 M5,5 v30 M95,5 h-30 M95,5 v30 M5,95 h30 M5,95 v-30 M95,95 h-30 M95,95 v-30"
-          stroke="#10b981"
-          strokeWidth="4"
-          fill="none"
-        />
-      </svg>
-      <div className="absolute w-28 h-28 flex items-center justify-center">
-        {qrDataUrl ? (
-          <Image
-            src={qrDataUrl}
-            alt={`GatePass QR ${ticketId}`}
-            width={112}
-            height={112}
-            unoptimized
-            className="w-full h-full object-contain"
-          />
-        ) : loading ? (
-          <div className="flex flex-col items-center justify-center gap-1.5">
-            <div className="w-5 h-5 border-2 border-[#10b981] border-t-transparent rounded-full animate-spin"></div>
-            <span className="text-[9px] text-gray-400 font-medium">Generating QR...</span>
-          </div>
-        ) : (
-          <span className="text-[10px] text-red-500 font-medium text-center">
-            Error loading QR
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
+const paymentTabs: { id: PaymentTab; name: string; icon: typeof Smartphone }[] = [
+  { id: "upi", name: "Pay by any UPI App", icon: Smartphone },
+  { id: "card", name: "Debit/Credit Card", icon: CreditCard },
+  { id: "wallet", name: "Mobile Wallets", icon: Wallet },
+  { id: "voucher", name: "Gift Voucher", icon: Gift },
+  { id: "netbanking", name: "Net Banking", icon: Building2 },
+  { id: "paylater", name: "Pay Later", icon: Info },
+  { id: "points", name: "Redeem Points", icon: Ticket },
+];
 
 export function BookingClient({
   event,
@@ -139,15 +75,14 @@ export function BookingClient({
   event: EventDto;
   categories: CategoryDto[];
 }) {
+  const isDevCheckout = process.env.NEXT_PUBLIC_ENABLE_DEV_AUTH === "true";
   const searchParams = useSearchParams();
-  const [categoryId, setCategoryId] = useState(categories[0]?.id ?? "");
-
-  useEffect(() => {
-    const catId = searchParams.get("category");
-    if (catId && categories.some((c) => c.id === catId)) {
-      setCategoryId(catId);
-    }
-  }, [searchParams, categories]);
+  const requestedCategoryId = searchParams.get("category");
+  const initialCategoryId =
+    requestedCategoryId && categories.some((category) => category.id === requestedCategoryId)
+      ? requestedCategoryId
+      : categories[0]?.id ?? "";
+  const [categoryId, setCategoryId] = useState(initialCategoryId);
 
   const [quantity, setQuantity] = useState(2);
   const [buyerName, setBuyerName] = useState("Aarav Mehta");
@@ -156,12 +91,11 @@ export function BookingClient({
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{
     tickets: IssuedTicket[];
-    rawTokens: string[];
   } | null>(null);
   const [error, setError] = useState("");
 
   // Payment UI states
-  const [activePaymentTab, setActivePaymentTab] = useState<"upi" | "card" | "wallet" | "voucher" | "netbanking" | "paylater" | "points">("upi");
+  const [activePaymentTab, setActivePaymentTab] = useState<PaymentTab>("upi");
   const [giveDonation, setGiveDonation] = useState(false);
   const [upiId, setUpiId] = useState("");
   const [showUpiQr, setShowUpiQr] = useState(false);
@@ -171,7 +105,7 @@ export function BookingClient({
   const [tempName, setTempName] = useState(buyerName);
   const [tempEmail, setTempEmail] = useState(buyerEmail);
   const [tempPhone, setTempPhone] = useState(buyerPhone);
-  const [tempState, setTempState] = useState("Punjab");
+  const [tempState] = useState("Punjab");
 
   // Card details state
   const [cardNumber, setCardNumber] = useState("");
@@ -238,18 +172,28 @@ export function BookingClient({
       const orderPayload = await orderResponse.json();
       if (!orderResponse.ok) throw new Error(orderPayload.message ?? "Order failed");
 
-      const paymentResponse = await fetch(
-        `/api/orders/${orderPayload.order.id}/manual-confirm`,
-        { method: "POST" },
-      );
+      if (isDevCheckout) {
+        const confirmResponse = await fetch(`/api/orders/${orderPayload.order.id}/manual-confirm`, {
+          method: "POST",
+        });
+        const confirmPayload = await confirmResponse.json();
+        if (!confirmResponse.ok) {
+          throw new Error(confirmPayload.message ?? "Dev checkout failed");
+        }
+        setResult({ tickets: confirmPayload.tickets ?? [] });
+        return;
+      }
+
+      const paymentResponse = await fetch("/api/payments/razorpay/create-order", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ orderId: orderPayload.order.id, currency: "INR" }),
+      });
       const paymentPayload = await paymentResponse.json();
       if (!paymentResponse.ok) {
-        throw new Error(paymentPayload.message ?? "Payment confirmation failed");
+        throw new Error(paymentPayload.message ?? "Payment gateway unavailable");
       }
-      setResult({
-        tickets: paymentPayload.tickets,
-        rawTokens: paymentPayload.rawTokens,
-      });
+      throw new Error("Secure payment checkout is not configured for this deployment.");
     } catch (bookingError) {
       setError(
         bookingError instanceof Error
@@ -261,12 +205,48 @@ export function BookingClient({
     }
   }
 
-  // Set temp states whenever main states change
-  useEffect(() => {
-    setTempName(buyerName);
-    setTempEmail(buyerEmail);
-    setTempPhone(buyerPhone);
-  }, [buyerName, buyerEmail, buyerPhone]);
+  // ── Ticket QR image component ─────────────────────────────────────────────
+  function TicketQrImage({ ticketId }: { ticketId: string }) {
+    const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+    const [qrError, setQrError] = useState(false);
+
+    useEffect(() => {
+      let cancelled = false;
+      setQrDataUrl(null);
+      setQrError(false);
+      fetch(`/api/tickets/${ticketId}/qr`)
+        .then((res) => {
+          if (!res.ok) throw new Error("QR unavailable");
+          return res.json() as Promise<{ qrDataUrl?: string }>;
+        })
+        .then((payload) => {
+          if (!cancelled && payload.qrDataUrl) setQrDataUrl(payload.qrDataUrl);
+          else if (!cancelled) setQrError(true);
+        })
+        .catch(() => { if (!cancelled) setQrError(true); });
+      return () => { cancelled = true; };
+    }, [ticketId]);
+
+    if (qrError) {
+      return (
+        <div className="w-36 h-36 flex items-center justify-center text-xs text-gray-400 text-center">
+          QR unavailable — open Digital Pass
+        </div>
+      );
+    }
+    if (!qrDataUrl) {
+      return (
+        <div className="w-36 h-36 flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+        </div>
+      );
+    }
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={qrDataUrl} alt={`GatePass QR for ${ticketId}`} width={144} height={144} className="w-36 h-36" />
+    );
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   if (result) {
     return (
@@ -284,19 +264,19 @@ export function BookingClient({
             <div className="border-b border-dashed border-gray-200 pb-4 text-center">
               <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Show this QR code at entry</span>
               <div className="my-4 flex flex-col items-center gap-4">
-                {result.tickets.map((ticket, index) => {
-                  const token = result.rawTokens[index] ?? "";
-                  const link = `/app/pass/${ticket.id}?token=${encodeURIComponent(token)}`;
+                {result.tickets.map((ticket) => {
+                  const link = `/app/pass/${ticket.id}`;
                   return (
                     <div key={ticket.id} className="w-full flex flex-col items-center bg-gray-50 p-4 rounded-xl border border-gray-100">
                       <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm mb-2">
-                        <TicketQr ticketId={ticket.id} token={token} />
+                        <TicketQrImage ticketId={ticket.id} />
                       </div>
+                      <p className="text-[10px] text-gray-400 font-medium mb-1">Ticket: {ticket.id}</p>
                       <Link
                         href={link}
                         className="text-xs text-rose-500 font-bold hover:underline flex items-center gap-1"
                       >
-                        Open Digital GatePass QR ({ticket.id})
+                        Open Digital GatePass QR
                       </Link>
                     </div>
                   );
@@ -325,7 +305,7 @@ export function BookingClient({
 
             {result.tickets[0] ? (
               <div className="pt-2">
-                <WalletSmartRedirect ticketId={result.tickets[0].id} qrToken={result.rawTokens[0] ?? ""} />
+                <WalletSmartRedirect ticketId={result.tickets[0].id} />
               </div>
             ) : null}
 
@@ -372,22 +352,14 @@ export function BookingClient({
               <h2 className="font-bold text-gray-800 uppercase text-xs tracking-wider">Payment Options</h2>
             </div>
             <div className="flex md:flex-col overflow-x-auto md:overflow-x-visible no-scrollbar">
-              {[
-                { id: "upi", name: "Pay by any UPI App", icon: Smartphone },
-                { id: "card", name: "Debit/Credit Card", icon: CreditCard },
-                { id: "wallet", name: "Mobile Wallets", icon: Wallet },
-                { id: "voucher", name: "Gift Voucher", icon: Gift },
-                { id: "netbanking", name: "Net Banking", icon: Building2 },
-                { id: "paylater", name: "Pay Later", icon: Info },
-                { id: "points", name: "Redeem Points", icon: Ticket }
-              ].map((tab) => {
+              {paymentTabs.map((tab) => {
                 const TabIcon = tab.icon;
                 const isActive = activePaymentTab === tab.id;
                 return (
                   <button
                     type="button"
                     key={tab.id}
-                    onClick={() => setActivePaymentTab(tab.id as any)}
+                    onClick={() => setActivePaymentTab(tab.id)}
                     className={`flex items-center gap-3 px-5 py-4 text-left text-xs font-bold transition-all border-b md:border-b-0 border-gray-100 whitespace-nowrap md:whitespace-normal w-full shrink-0 ${isActive
                       ? "border-l-4 border-rose-500 bg-white text-rose-600"
                       : "text-gray-600 hover:bg-gray-50"

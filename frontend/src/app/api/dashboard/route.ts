@@ -5,7 +5,7 @@ import { getDashboard } from "@/backend/modules/dashboard";
 
 export async function GET(request: NextRequest) {
   return withErrorHandling(async () => {
-    requireApiPermission(request, "dashboard:read");
+    await requireApiPermission(request, "dashboard:read");
     const eventId = request.nextUrl.searchParams.get("eventId") ?? undefined;
     return getDashboard(eventId);
   });

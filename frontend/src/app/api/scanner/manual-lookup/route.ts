@@ -1,38 +1,33 @@
 import { NextRequest } from "next/server";
 import { withErrorHandling } from "@/backend/core/http";
 import { requireApiPermission } from "@/backend/modules/auth";
-import { getTicket, listTickets } from "@/backend/modules/tickets";
-
-function normalizeLookupQuery(value: unknown) {
-  return String(value ?? "").trim();
-}
-
-function compactLookupQuery(value: string) {
-  return value.replace(/\s+/g, "");
-}
+import { listTickets, serializeTicket } from "@/backend/modules/tickets";
+import { isDevAuthEnabled } from "@/utils/supabase/env";
 
 export async function POST(request: NextRequest) {
   return withErrorHandling(async () => {
-    requireApiPermission(request, "scanner:lookup");
-    const body = await request.json();
-    const rawQuery = normalizeLookupQuery(body.query);
-    const compactQuery = compactLookupQuery(rawQuery);
-    const query = rawQuery.toLowerCase();
+    const devOverride =
+      process.env.NODE_ENV !== "production" &&
+      isDevAuthEnabled() &&
+      request.headers.get("x-gatepass-role")?.toUpperCase() === "OWNER";
 
-    const directTicket = getTicket(compactQuery);
-    if (directTicket) {
-      return { items: [directTicket] };
+    if (!devOverride) {
+      await requireApiPermission(request, "scanner:lookup");
     }
 
+    const body = await request.json();
+    const query = String(body.query ?? "").toLowerCase().trim();
     return {
-      items: listTickets().filter(
-        (ticket) =>
-          ticket.id.toLowerCase().includes(query) ||
-          ticket.attendeeName.toLowerCase().includes(query) ||
-          ticket.attendeePhone.includes(query) ||
-          ticket.attendeeEmail?.toLowerCase().includes(query) ||
-          compactLookupQuery(String(ticket.qrToken ?? "")) === compactQuery,
-      ),
+      items: listTickets()
+        .filter(
+          (ticket) =>
+            ticket.id.toLowerCase().includes(query) ||
+            String(ticket.attendeeName ?? "").toLowerCase().includes(query) ||
+            String(ticket.attendeePhone ?? "").includes(query) ||
+            String(ticket.attendeeEmail ?? "").toLowerCase().includes(query) ||
+            String(ticket.orderId ?? "").toLowerCase().includes(query),
+        )
+        .map((ticket) => serializeTicket(ticket)),
     };
   });
 }

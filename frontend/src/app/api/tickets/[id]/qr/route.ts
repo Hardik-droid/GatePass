@@ -1,18 +1,33 @@
-import { NextRequest } from "next/server";
-import { withErrorHandling } from "@/backend/core/http";
-import { generateQrSvgOrDataUrl, verifyQrToken } from "@/backend/modules/qr-service";
+import { HttpError, withErrorHandling } from "@/backend/core/http";
+import { getSession, requireTicketAccess } from "@/backend/modules/auth";
+import { generateQrSvgOrDataUrl } from "@/backend/modules/qr-service";
+import { getTicket } from "@/backend/modules/tickets";
+import { isDevAuthEnabled } from "@/utils/supabase/env";
 
 export async function GET(
-  request: NextRequest,
+  _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   return withErrorHandling(async () => {
     const { id } = await params;
-    const token = request.nextUrl.searchParams.get("token") ?? "";
-    const verified = verifyQrToken(token);
-    if (!verified.valid || verified.ticketId !== id) {
-      return { qrDataUrl: null, error: "QR token is required to render this pass" };
+    const ticket = getTicket(id);
+    if (!ticket) throw new HttpError(404, "Ticket not found");
+
+    // In dev mode allow QR generation for any valid ticket (same posture as manual-confirm).
+    // In production always enforce session ownership.
+    if (process.env.NODE_ENV !== "production" && isDevAuthEnabled()) {
+      const session = await getSession();
+      if (!session) {
+        // Unauthenticated dev request: allow QR if ticket exists (just booked flow)
+        const token = ticket.qrToken || "";
+        if (!token) throw new HttpError(404, "QR token unavailable");
+        return { qrDataUrl: await generateQrSvgOrDataUrl(token) };
+      }
     }
+
+    await requireTicketAccess(ticket);
+    const token = ticket.qrToken || "";
+    if (!token) throw new HttpError(404, "QR token unavailable");
     return { qrDataUrl: await generateQrSvgOrDataUrl(token) };
   });
 }

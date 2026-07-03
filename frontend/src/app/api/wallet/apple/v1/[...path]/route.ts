@@ -4,12 +4,27 @@ import {
   registerAppleDevice,
   signApplePkpass,
   unregisterAppleDevice,
+  validateApplePassAuth,
 } from "@/backend/modules/apple-wallet-service";
 import { recordAudit } from "@/backend/modules/audit";
 import { getTicket } from "@/backend/modules/tickets";
 import { syncWalletPassStatus } from "@/backend/modules/wallet-service";
 
 type ApplePathParams = { path: string[] };
+
+function getApplePassAuthToken(request: NextRequest) {
+  const authorization = request.headers.get("authorization") ?? "";
+  const [scheme, token] = authorization.split(/\s+/, 2);
+  return scheme === "ApplePass" ? token : "";
+}
+
+function requireApplePassAuth(serialNumber: string, request: NextRequest) {
+  const authToken = getApplePassAuthToken(request);
+  if (!authToken || !validateApplePassAuth(serialNumber, authToken)) {
+    return NextResponse.json({ message: "Invalid Apple pass authorization" }, { status: 401 });
+  }
+  return null;
+}
 
 function parsePath(path: string[]) {
   const registrationsIndex = path.indexOf("registrations");
@@ -25,7 +40,7 @@ function parsePath(path: string[]) {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<ApplePathParams> },
 ) {
   try {
@@ -34,8 +49,11 @@ export async function GET(
       return NextResponse.json(getChangedApplePassSerials(parsed.deviceLibraryIdentifier));
     }
     if (parsed.isPassDownload && parsed.serialNumber) {
+      const authError = requireApplePassAuth(parsed.serialNumber, request);
+      if (authError) return authError;
       const ticket = getTicket(parsed.serialNumber);
-      const pass = await signApplePkpass(parsed.serialNumber, ticket?.qrToken || `token-${parsed.serialNumber}`);
+      if (!ticket?.qrToken) return NextResponse.json({ message: "Ticket not found" }, { status: 404 });
+      const pass = await signApplePkpass(parsed.serialNumber, ticket.qrToken);
       if (!pass.configured || !("pkpassBuffer" in pass)) return NextResponse.json(pass);
       const pkpassBuffer = pass.pkpassBuffer;
       if (!pkpassBuffer) return NextResponse.json({ message: "Apple pass generation failed" }, { status: 400 });
@@ -64,6 +82,8 @@ export async function POST(
     return NextResponse.json({ ok: true });
   }
   if (parsed.isDeviceRegistration && parsed.serialNumber) {
+    const authError = requireApplePassAuth(parsed.serialNumber, request);
+    if (authError) return authError;
     const body = await request.json().catch(() => ({}));
     return NextResponse.json(registerAppleDevice(parsed.deviceLibraryIdentifier, parsed.serialNumber, String(body.pushToken ?? "")));
   }
@@ -71,11 +91,13 @@ export async function POST(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<ApplePathParams> },
 ) {
   const parsed = parsePath((await params).path);
   if (parsed.isDeviceRegistration && parsed.serialNumber) {
+    const authError = requireApplePassAuth(parsed.serialNumber, request);
+    if (authError) return authError;
     return NextResponse.json(unregisterAppleDevice(parsed.deviceLibraryIdentifier, parsed.serialNumber));
   }
   return NextResponse.json({ message: "Unsupported Apple Wallet endpoint" }, { status: 404 });

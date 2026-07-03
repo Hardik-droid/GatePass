@@ -1,10 +1,12 @@
 import { NextRequest } from "next/server";
 import { withErrorHandling } from "@/backend/core/http";
 import { createId, nowIso } from "@/backend/core/ids";
-import { getStore } from "@/backend/core/store";
+import { getStore, persistStoreRecord } from "@/backend/core/store";
+import { requireApiPermission } from "@/backend/modules/auth";
 
 export async function POST(request: NextRequest) {
   return withErrorHandling(async () => {
+    await requireApiPermission(request, "team:write");
     const body = await request.json();
     const orgId = String(body.organizationId ?? getStore().organizations[0]?.id);
     const member = {
@@ -16,6 +18,7 @@ export async function POST(request: NextRequest) {
       createdAt: nowIso(),
     };
     getStore().organizationMembers.push(member);
+    await persistStoreRecord("organizationMembers", member);
     return { member };
   });
 }

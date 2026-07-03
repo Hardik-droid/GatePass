@@ -9,7 +9,7 @@ export async function POST(
   { params }: { params: Promise<{ slug: string }> },
 ) {
   return withErrorHandling(async () => {
-    requireApiPermission(request, "tickets:write");
+    await requireApiPermission(request, "tickets:write");
     const { slug } = await params;
     const payload = await parseJson(request, ticketCategoryCreateSchema);
     return createTicketCategory({ ...payload, eventId: slug });

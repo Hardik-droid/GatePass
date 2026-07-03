@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Anton, Cinzel, Cormorant_Garamond, Space_Grotesk } from "next/font/google";
-import { SpeedInsightsClient } from "@/components/speed-insights";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 
 const display = Anton({
@@ -48,7 +48,7 @@ export default function RootLayout({
     <html lang="en" className={`${display.variable} ${body.variable} ${luxury.variable} ${label.variable}`}>
       <body>
         {children}
-        <SpeedInsightsClient />
+        <SpeedInsights />
       </body>
     </html>
   );

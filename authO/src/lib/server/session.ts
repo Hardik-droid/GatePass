@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 import { cookies } from "next/headers";
-import type { NextResponse } from "next/server";
+import type { User } from "@supabase/supabase-js";
+import { createClient as createSupabaseServerClient } from "@/utils/supabase/server";
+import { hasSupabaseAuthConfig, isDevAuthEnabled } from "@/utils/supabase/env";
 
 export type GatePassSession = {
   userId: string;
@@ -8,12 +10,17 @@ export type GatePassSession = {
   name?: string;
   provider: "email" | "google" | "apple" | "dev";
   role: "attendee" | "owner" | "scanner";
+  phone?: string;
 };
 
 const COOKIE_NAME = "gatepass_session";
 
 function secret() {
-  return process.env.SESSION_SIGNING_SECRET || process.env.WALLET_LINK_SIGNING_SECRET || "gatepass-dev-session-secret";
+  const value = process.env.SESSION_SIGNING_SECRET || process.env.WALLET_LINK_SIGNING_SECRET;
+  if (!value && process.env.NODE_ENV === "production") {
+    throw new Error("SESSION_SIGNING_SECRET is required in production");
+  }
+  return value || "gatepass-dev-session-secret";
 }
 
 function sign(payload: string) {
@@ -38,10 +45,32 @@ export function decodeSession(value?: string) {
 
 export async function getServerSession() {
   const cookieStore = await cookies();
-  return decodeSession(cookieStore.get(COOKIE_NAME)?.value);
+
+  if (hasSupabaseAuthConfig()) {
+    try {
+      const supabase = createSupabaseServerClient(cookieStore);
+      const { data } = await supabase.auth.getUser();
+      if (data.user) {
+        return sessionFromSupabaseUser(data.user);
+      }
+    } catch {
+      if (!isDevAuthEnabled()) return null;
+    }
+
+    if (!isDevAuthEnabled()) return null;
+  }
+
+  const legacySession = decodeSession(cookieStore.get(COOKIE_NAME)?.value);
+  return legacySession;
 }
 
-export function setSessionCookie(response: NextResponse, session: GatePassSession) {
+type CookieWritableResponse = {
+  cookies: {
+    set(name: string, value: string, options: Record<string, unknown>): void;
+  };
+};
+
+export function setSessionCookie(response: CookieWritableResponse, session: GatePassSession) {
   response.cookies.set(COOKIE_NAME, encodeSession(session), {
     httpOnly: true,
     sameSite: "lax",
@@ -51,7 +80,7 @@ export function setSessionCookie(response: NextResponse, session: GatePassSessio
   });
 }
 
-export function clearSessionCookie(response: NextResponse) {
+export function clearSessionCookie(response: CookieWritableResponse) {
   response.cookies.set(COOKIE_NAME, "", {
     httpOnly: true,
     sameSite: "lax",
@@ -62,6 +91,25 @@ export function clearSessionCookie(response: NextResponse) {
 }
 
 export function isSupabaseAuthConfigured() {
-  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  return hasSupabaseAuthConfig();
 }
 
+function sessionFromSupabaseUser(user: User): GatePassSession {
+  const metadata = (user.user_metadata ?? {}) as Record<string, unknown>;
+  const appMetadata = (user.app_metadata ?? {}) as Record<string, unknown>;
+  const role = roleFromMetadata(metadata.role ?? appMetadata.role);
+  const provider = appMetadata.provider === "google" || appMetadata.provider === "apple" ? appMetadata.provider : "email";
+
+  return {
+    userId: user.id,
+    email: user.email || "",
+    name: String(metadata.name ?? metadata.full_name ?? ""),
+    provider,
+    role,
+    phone: user.phone || (typeof metadata.phone === "string" && metadata.phone.length ? metadata.phone : undefined),
+  };
+}
+
+function roleFromMetadata(value: unknown): GatePassSession["role"] {
+  return value === "owner" || value === "scanner" ? value : "attendee";
+}

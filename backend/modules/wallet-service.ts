@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { createId, nowIso } from "../core/ids";
-import { getStore } from "../core/store";
+import { getStore, persistStoreRecord, persistStoreUpdate } from "../core/store";
 import { recordAudit } from "./audit";
 import { getTicket } from "./tickets";
 
@@ -22,7 +22,11 @@ type WalletStatus =
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 function linkSecret() {
-  return process.env.WALLET_LINK_SIGNING_SECRET || "gatepass-dev-wallet-link-secret";
+  const secret = process.env.WALLET_LINK_SIGNING_SECRET;
+  if (!secret && process.env.NODE_ENV === "production") {
+    throw new Error("WALLET_LINK_SIGNING_SECRET is required in production");
+  }
+  return secret || "gatepass-dev-wallet-link-secret";
 }
 
 export function createApplePassAuthenticationToken(ticketId: string) {
@@ -76,6 +80,7 @@ export function saveWalletPreference(userId: string, preference: WalletPreferenc
     oldValue,
     newValue: row,
   });
+  void persistStoreUpdate("userWalletPreferences", row).catch((error) => console.error("Wallet preference persistence failed", error));
   return row;
 }
 
@@ -121,9 +126,14 @@ function getOrCreateWalletPass(ticketId: string, provider: WalletProvider) {
       updatedAt: timestamp,
     };
     store.walletPasses.push(pass);
+    const createdPass = pass;
     if (provider === "apple") ticket.appleWalletPassId = pass.id;
     if (provider === "google") ticket.googleWalletPassId = pass.id;
     ticket.walletLastUpdatedAt = timestamp;
+    void Promise.all([
+      persistStoreRecord("walletPasses", createdPass),
+      persistStoreUpdate("tickets", ticket),
+    ]).catch((error) => console.error("Wallet pass persistence failed", error));
     recordAudit({
       action: "wallet.pass.created",
       entityType: "wallet_passes",
@@ -142,16 +152,14 @@ export function getOrCreateGoogleWalletObject(ticketId: string) {
   return getOrCreateWalletPass(ticketId, "google");
 }
 
-export function generateApplePassDownloadUrl(ticketId: string, qrToken = "") {
+export function generateApplePassDownloadUrl(ticketId: string) {
   const token = createSignedWalletLinkToken(ticketId, "apple");
-  const qr = qrToken ? `&qrToken=${encodeURIComponent(qrToken)}` : "";
-  return `${APP_URL}/api/wallet/apple/pass/${encodeURIComponent(ticketId)}?token=${encodeURIComponent(token)}${qr}`;
+  return `${APP_URL}/api/wallet/apple/pass/${encodeURIComponent(ticketId)}?token=${encodeURIComponent(token)}`;
 }
 
-export function generateGoogleSaveLink(ticketId: string, qrToken = "") {
+export function generateGoogleSaveLink(ticketId: string) {
   const token = createSignedWalletLinkToken(ticketId, "google");
-  const qr = qrToken ? `&qrToken=${encodeURIComponent(qrToken)}` : "";
-  return `${APP_URL}/api/wallet/google/save-link/${encodeURIComponent(ticketId)}?token=${encodeURIComponent(token)}${qr}`;
+  return `${APP_URL}/api/wallet/google/save-link/${encodeURIComponent(ticketId)}?token=${encodeURIComponent(token)}`;
 }
 
 export function prepareWalletPasses(ticketId: string, context: Record<string, unknown> = {}) {
@@ -161,11 +169,14 @@ export function prepareWalletPasses(ticketId: string, context: Record<string, un
   const google = providerConfigured("google");
   applePass.status = "link_generated";
   googlePass.status = "link_generated";
-  const rawToken = String(context.rawToken ?? "");
-  applePass.saveUrl = generateApplePassDownloadUrl(ticketId, rawToken);
-  googlePass.saveUrl = generateGoogleSaveLink(ticketId, rawToken);
+  applePass.saveUrl = generateApplePassDownloadUrl(ticketId);
+  googlePass.saveUrl = generateGoogleSaveLink(ticketId);
   applePass.updatedAt = nowIso();
   googlePass.updatedAt = applePass.updatedAt;
+  void Promise.all([
+    persistStoreUpdate("walletPasses", applePass),
+    persistStoreUpdate("walletPasses", googlePass),
+  ]).catch((error) => console.error("Wallet preparation persistence failed", error));
   recordAudit({
     action: "wallet.pass.prepared",
     entityType: "tickets",
@@ -201,6 +212,9 @@ export function syncWalletPassStatus(ticketId: string, status: WalletStatus) {
     pass.lastSyncedAt = timestamp;
     pass.updatedAt = timestamp;
   });
+  void Promise.all(passes.map((pass) => persistStoreUpdate("walletPasses", pass))).catch((error) =>
+    console.error("Wallet status persistence failed", error),
+  );
   recordAudit({
     action: "wallet.pass.status.synced",
     entityType: "tickets",

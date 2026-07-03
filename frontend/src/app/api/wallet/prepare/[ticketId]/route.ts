@@ -1,14 +1,16 @@
-import { NextRequest } from "next/server";
 import { withErrorHandling } from "@/backend/core/http";
+import { requireTicketAccess } from "@/backend/modules/auth";
+import { getTicket } from "@/backend/modules/tickets";
 import { prepareWalletPasses } from "@/backend/modules/wallet-service";
 
 export async function POST(
-  request: NextRequest,
+  _request: Request,
   { params }: { params: Promise<{ ticketId: string }> },
 ) {
   return withErrorHandling(async () => {
     const { ticketId } = await params;
-    const body = await request.json().catch(() => ({}));
-    return prepareWalletPasses(ticketId, { rawToken: body.qrToken });
+    const ticket = getTicket(ticketId);
+    await requireTicketAccess(ticket);
+    return prepareWalletPasses(ticketId);
   });
 }

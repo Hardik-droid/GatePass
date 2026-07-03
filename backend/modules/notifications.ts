@@ -1,5 +1,5 @@
 import { createId, nowIso } from "../core/ids";
-import { getStore } from "../core/store";
+import { getStore, persistStoreRecord } from "../core/store";
 
 export function listNotifications() {
   return getStore().notifications;
@@ -19,6 +19,7 @@ export function queueNotification(payload: Record<string, unknown>) {
     ...payload,
   };
   getStore().notifications.unshift(notification);
+  void persistStoreRecord("notifications", notification).catch((error) => console.error("Notification persistence failed", error));
   return { notification };
 }
 

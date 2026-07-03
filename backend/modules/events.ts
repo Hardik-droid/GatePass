@@ -1,12 +1,37 @@
 import { createId } from "../core/ids";
-import { getStore } from "../core/store";
+import { getStore, persistStoreRecord, persistStoreUpdate } from "../core/store";
+
+export type EventRecord = {
+  id: string;
+  organizationId: string;
+  slug: string;
+  title: string;
+  description: string;
+  eventType: string;
+  status: string;
+  visibility: string;
+  venue: string;
+  city: string;
+  startTime: string;
+  gpsRequired: boolean;
+  [key: string]: unknown;
+};
+
+export type TicketCategoryRecord = {
+  id: string;
+  eventId: string;
+  name: string;
+  pricePaisa: number;
+  capacity: number;
+  [key: string]: unknown;
+};
 
 export function listEvents() {
-  return getStore().events;
+  return getStore().events as EventRecord[];
 }
 
 export function getEventBySlug(slug: string) {
-  return getStore().events.find((event) => event.slug === slug || event.id === slug);
+  return getStore().events.find((event) => event.slug === slug || event.id === slug) as EventRecord | undefined;
 }
 
 export function createEvent(payload: Record<string, unknown>) {
@@ -25,12 +50,13 @@ export function createEvent(payload: Record<string, unknown>) {
     gpsRequired: Boolean(payload.gpsRequired ?? false),
   };
   getStore().events.push(event);
+  void persistStoreRecord("events", event).catch((error) => console.error("Event persistence failed", error));
   return { event };
 }
 
 export function listTicketCategories(eventId?: string) {
   const categories = getStore().ticketCategories;
-  return eventId ? categories.filter((category) => category.eventId === eventId) : categories;
+  return (eventId ? categories.filter((category) => category.eventId === eventId) : categories) as TicketCategoryRecord[];
 }
 
 export function createTicketCategory(payload: Record<string, unknown>) {
@@ -42,17 +68,24 @@ export function createTicketCategory(payload: Record<string, unknown>) {
     capacity: Number(payload.capacity ?? 100),
   };
   getStore().ticketCategories.push(category);
+  void persistStoreRecord("ticketCategories", category).catch((error) => console.error("Ticket category persistence failed", error));
   return { category };
 }
 
 export function publishEvent(id: string) {
-  const event = getStore().events.find((entry) => entry.id === id);
+  const event = getStore().events.find((entry) => entry.id === id) as EventRecord | undefined;
   if (event) event.status = "live";
+  if (event) {
+    void persistStoreUpdate("events", event).catch((error) => console.error("Event publish persistence failed", error));
+  }
   return event;
 }
 
 export function updateEvent(id: string, payload: Record<string, unknown>) {
-  const event = getStore().events.find((entry) => entry.id === id);
+  const event = getStore().events.find((entry) => entry.id === id) as EventRecord | undefined;
   if (event) Object.assign(event, payload);
+  if (event) {
+    void persistStoreUpdate("events", event).catch((error) => console.error("Event update persistence failed", error));
+  }
   return event;
 }

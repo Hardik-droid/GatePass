@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { cookies } from "next/headers";
 import { parseJson, withErrorHandling } from "@/backend/core/http";
 import { authEmailSchema } from "@/backend/core/schemas";
 import { getServerSession, isSupabaseAuthConfigured, setSessionCookie, clearSessionCookie } from "@/authO/lib/server/session";
+import { upsertUserProfile } from "@/backend/db/supabase";
+import { createClient as createSupabaseServerClient } from "@/utils/supabase/server";
+
+function safeRedirect(value?: string) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/app";
+  return value;
+}
 
 export async function GET() {
   return withErrorHandling(async () => {
@@ -14,14 +21,11 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const payload = await parseJson(request, authEmailSchema);
-    const redirectTo = payload.redirectTo || "/app";
+    const redirectTo = safeRedirect(payload.redirectTo);
 
     if (isSupabaseAuthConfigured()) {
-      const supabase = createClient(
-        String(process.env.NEXT_PUBLIC_SUPABASE_URL),
-        String(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
-        { auth: { persistSession: false, autoRefreshToken: false } },
-      );
+      const cookieStore = await cookies();
+      const supabase = createSupabaseServerClient(cookieStore);
       const result =
         payload.mode === "signup"
           ? await supabase.auth.signUp({
@@ -41,14 +45,16 @@ export async function POST(request: NextRequest) {
       }
 
       const response = NextResponse.json({ ok: true, redirectTo });
-      setSessionCookie(response, {
-        userId: result.data.user.id,
-        email: result.data.user.email || payload.email,
+      await upsertUserProfile({
+        id: result.data.user.id,
         name: String(result.data.user.user_metadata?.name ?? payload.name ?? ""),
-        provider: "email",
-        role: "attendee",
+        email: result.data.user.email || payload.email,
       });
       return response;
+    }
+
+    if (process.env.NODE_ENV === "production" || process.env.NEXT_PUBLIC_ENABLE_DEV_AUTH !== "true") {
+      return NextResponse.json({ message: "Authentication provider is not configured" }, { status: 503 });
     }
 
     const response = NextResponse.json({ ok: true, redirectTo, devMode: true });
@@ -70,6 +76,11 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE() {
   const response = NextResponse.json({ ok: true, redirectTo: "/login" });
+  if (isSupabaseAuthConfigured()) {
+    const cookieStore = await cookies();
+    const supabase = createSupabaseServerClient(cookieStore);
+    await supabase.auth.signOut();
+  }
   clearSessionCookie(response);
   return response;
 }

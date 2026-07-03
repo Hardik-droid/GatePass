@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { isSupabaseAuthConfigured, setSessionCookie } from "@/authO/lib/server/session";
+import { getAppUrl, getSupabasePublishableKey, getSupabaseUrl } from "@/utils/supabase/env";
 
 type Params = { provider: string };
 
-function appUrl(request: NextRequest) {
-  return process.env.NEXT_PUBLIC_APP_URL || `${request.nextUrl.protocol}//${request.nextUrl.host}`;
+function safeRedirect(value?: string) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/app";
+  return value;
 }
 
 export async function GET(
@@ -17,24 +19,28 @@ export async function GET(
     return NextResponse.json({ message: "Unsupported auth provider" }, { status: 400 });
   }
 
-  const redirect = request.nextUrl.searchParams.get("redirect") || "/app";
+  const redirect = safeRedirect(request.nextUrl.searchParams.get("redirect") || "/app");
 
   if (isSupabaseAuthConfigured()) {
     const supabase = createClient(
-      String(process.env.NEXT_PUBLIC_SUPABASE_URL),
-      String(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+      getSupabaseUrl(),
+      getSupabasePublishableKey(),
       { auth: { persistSession: false, autoRefreshToken: false } },
     );
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${appUrl(request)}/api/auth/callback?redirect=${encodeURIComponent(redirect)}`,
+        redirectTo: `${getAppUrl(request)}/api/auth/callback?redirect=${encodeURIComponent(redirect)}`,
       },
     });
     if (error || !data.url) {
       return NextResponse.json({ message: error?.message || "OAuth redirect could not be created" }, { status: 400 });
     }
     return NextResponse.redirect(data.url);
+  }
+
+  if (process.env.NODE_ENV === "production" || process.env.NEXT_PUBLIC_ENABLE_DEV_AUTH !== "true") {
+    return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent("Authentication provider is not configured")}`, request.url));
   }
 
   const response = NextResponse.redirect(new URL(redirect, request.url));

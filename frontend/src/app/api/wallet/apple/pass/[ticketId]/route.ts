@@ -9,12 +9,13 @@ export async function GET(
 ) {
   const { ticketId } = await params;
   const token = request.nextUrl.searchParams.get("token") ?? "";
-  const qrToken = request.nextUrl.searchParams.get("qrToken") ?? getTicket(ticketId)?.qrToken ?? "";
-  if (token && !verifySignedWalletLinkToken(ticketId, "apple", token)) {
+  if (!token || !verifySignedWalletLinkToken(ticketId, "apple", token)) {
     return NextResponse.json({ message: "Wallet link expired or invalid" }, { status: 403 });
   }
   try {
-    const pass = await signApplePkpass(ticketId, qrToken || `token-${ticketId}`);
+    const qrToken = getTicket(ticketId)?.qrToken;
+    if (!qrToken) return NextResponse.json({ message: "Ticket not found" }, { status: 404 });
+    const pass = await signApplePkpass(ticketId, qrToken);
     if (!pass.configured || !("pkpassBuffer" in pass)) {
       return NextResponse.json(pass);
     }

@@ -64,11 +64,9 @@ export function WalletPreferenceStep({
 
 export function WalletSmartRedirect({
   ticketId,
-  qrToken = "",
   autoOpen = true,
 }: {
   ticketId: string;
-  qrToken?: string;
   autoOpen?: boolean;
 }) {
   const [preference, setPreference] = useState<WalletPreference>("ask");
@@ -85,8 +83,6 @@ export function WalletSmartRedirect({
         fetch("/api/user/wallet-preference").then((response) => response.json()),
         fetch(`/api/wallet/prepare/${ticketId}`, {
           method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ qrToken }),
         }).then((response) => response.json()),
       ]);
       if (cancelled) return;
@@ -118,7 +114,7 @@ export function WalletSmartRedirect({
     return () => {
       cancelled = true;
     };
-  }, [autoOpen, platform, qrToken, ticketId]);
+  }, [autoOpen, platform, ticketId]);
 
   const showPreference = preference === "ask";
 

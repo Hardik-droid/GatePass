@@ -8,7 +8,7 @@ export async function GET(
   { params }: { params: Promise<{ eventId: string }> },
 ) {
   return withErrorHandling(async () => {
-    requireApiPermission(request, "settlements:read");
+    await requireApiPermission(request, "settlements:read");
     const { eventId } = await params;
     return { settlement: getSettlements(eventId) };
   });

@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   return withErrorHandling(async () => {
-    requireApiPermission(request, "tickets:write");
+    await requireApiPermission(request, "tickets:write");
     const payload = await parseJson(request, ticketCategoryCreateSchema);
     return withIdempotency(
       "ticket-category:create",

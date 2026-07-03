@@ -5,7 +5,7 @@ import { listAuditEvents } from "@/backend/modules/audit";
 
 export async function GET(request: NextRequest) {
   return withErrorHandling(async () => {
-    requireApiPermission(request, "dashboard:read");
+    await requireApiPermission(request, "dashboard:read");
     return { items: listAuditEvents() };
   });
 }

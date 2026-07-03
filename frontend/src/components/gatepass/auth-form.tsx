@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
+import { isDevAuthEnabled } from "@/utils/supabase/env";
 
 export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const searchParams = useSearchParams();
@@ -31,6 +32,21 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
     }
     if (data.needsConfirmation) {
       setMessage(data.message || "Check your email to confirm your account.");
+      return;
+    }
+    window.location.href = data.redirectTo || "/app";
+  }
+
+  async function devLogin() {
+    setLoading(true);
+    setMessage("");
+    const response = await fetch(`/api/auth/dev?redirect=${encodeURIComponent(redirectTo)}&role=owner`, {
+      method: "POST",
+    });
+    const data = await response.json();
+    setLoading(false);
+    if (!response.ok) {
+      setMessage(data.message || "Dev login failed");
       return;
     }
     window.location.href = data.redirectTo || "/app";
@@ -77,6 +93,16 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
             >
               Continue with Apple
             </a>
+            {isDevAuthEnabled() ? (
+              <button
+                type="button"
+                onClick={devLogin}
+                disabled={loading}
+                className="rounded-2xl border border-dashed border-[#0a7f8f]/28 bg-[#0a7f8f]/6 px-4 py-3 text-center text-sm font-black uppercase tracking-[0.12em] text-[#086b78] transition hover:border-[#0a7f8f]/48 hover:bg-[#0a7f8f]/10 disabled:opacity-50"
+              >
+                {loading ? "Please wait..." : "Continue as Dev Owner"}
+              </button>
+            ) : null}
           </div>
 
           <div className="my-6 flex items-center gap-3 text-xs font-black uppercase tracking-[0.14em] text-[var(--ink)]/38">
@@ -148,4 +174,3 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
     </main>
   );
 }
-

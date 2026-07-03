@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { withErrorHandling } from "@/backend/core/http";
+import { requireTicketAccess } from "@/backend/modules/auth";
 import { createOrUpdateEventTicketObject } from "@/backend/modules/google-wallet-service";
+import { getTicket } from "@/backend/modules/tickets";
 
 export async function POST(
   request: NextRequest,
@@ -8,7 +10,9 @@ export async function POST(
 ) {
   return withErrorHandling(async () => {
     const { ticketId } = await params;
-    const body = await request.json().catch(() => ({}));
-    return createOrUpdateEventTicketObject(ticketId, String(body.qrToken ?? `token-${ticketId}`));
+    const ticket = getTicket(ticketId);
+    await requireTicketAccess(ticket);
+    if (!ticket?.qrToken) throw new Error("QR token unavailable");
+    return createOrUpdateEventTicketObject(ticketId, ticket.qrToken);
   });
 }
