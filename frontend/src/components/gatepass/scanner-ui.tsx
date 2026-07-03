@@ -25,6 +25,50 @@ import {
 
 type ScanStatus = "idle" | "scanning" | "success" | "already_used" | "invalid" | "error";
 
+interface ScannerValidationResponse {
+  success: boolean;
+  valid: boolean;
+  code:
+    | "VALID"
+    | "ALREADY_CHECKED_IN"
+    | "INVALID"
+    | "NOT_FOUND"
+    | "WRONG_EVENT"
+    | "CANCELLED"
+    | "REFUNDED"
+    | "EXPIRED"
+    | "OFFLINE_ERROR"
+    | "SERVER_ERROR";
+  message: string;
+  ticket?: {
+    id: string;
+    orderId?: string;
+    eventId: string;
+    eventName: string;
+    eventStartAt?: string;
+    venue?: string;
+    gateName?: string;
+    category: string;
+    status: string;
+    buyerName?: string;
+    buyerEmail?: string;
+    buyerPhone?: string;
+    attendeeName?: string;
+    attendeeEmail?: string;
+    attendeePhone?: string;
+    purchasedAt?: string;
+    checkedInAt?: string | null;
+    checkedInBy?: string | null;
+    checkedInGate?: string | null;
+    checkedInDevice?: string | null;
+  };
+  audit?: {
+    scannedAt: string;
+    scannerDevice?: string;
+    gateName?: string;
+  };
+}
+
 interface ScanPayload {
   status: string;
   message?: string;
@@ -46,6 +90,8 @@ interface TicketDetail {
   status: string;
   eventId?: string;
   orderId?: string;
+  eventName?: string;
+  categoryName?: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -63,11 +109,28 @@ function fmtTime(iso?: string) {
   }
 }
 
+function fmtDateTime(iso?: string) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }) + " · " + d.toLocaleTimeString("en-IN", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
 function normalizeStatus(raw: string): ScanStatus {
   const s = raw.toUpperCase();
-  if (s === "VALID") return "success";
-  if (s === "ALREADY USED" || s === "USED") return "already_used";
-  if (s === "INVALID" || s === "NOT FOUND" || s.includes("CANCEL") || s.includes("REFUND") || s.includes("EXPIRED")) return "invalid";
+  if (s === "VALID" || s === "SUCCESS") return "success";
+  if (s === "ALREADY USED" || s === "USED" || s === "ALREADY_CHECKED_IN") return "already_used";
+  if (s === "INVALID" || s === "NOT FOUND" || s === "NOT_FOUND" || s.includes("CANCEL") || s.includes("REFUND") || s.includes("EXPIRED")) return "invalid";
   return "error";
 }
 
@@ -86,10 +149,12 @@ function Pill({ label, value, icon: Icon }: { label: string; value: string; icon
 }
 
 function SuccessOverlay({
-  payload,
+  ticket,
+  audit,
   onNext,
 }: {
-  payload: ScanPayload;
+  ticket: NonNullable<ScannerValidationResponse["ticket"]>;
+  audit?: ScannerValidationResponse["audit"];
   onNext: () => void;
 }) {
   return (
@@ -106,11 +171,16 @@ function SuccessOverlay({
       <p className="text-xs font-black uppercase tracking-[0.3em] text-emerald-300">Ticket Scanned Successfully</p>
       <h2 className="mt-3 text-center text-4xl font-black">ENTRY ALLOWED</h2>
 
-      <div className="mt-8 w-full max-w-sm space-y-2">
-        <Pill label="Attendee" value={payload.attendeeName ?? payload.ticketId ?? "—"} icon={User} />
-        <Pill label="Ticket ID" value={payload.ticketId ?? "—"} icon={Tag} />
-        <Pill label="Scanned at" value={fmtTime(payload.checkedInAt)} icon={Clock} />
-        <Pill label="Gate" value={payload.gateName ?? "Main Gate"} icon={DoorOpen} />
+      <div className="mt-8 w-full max-w-sm space-y-2 max-h-[45vh] overflow-y-auto pr-1">
+        <Pill label="Attendee" value={ticket.attendeeName || "—"} icon={User} />
+        {ticket.buyerName && ticket.buyerName !== ticket.attendeeName && (
+          <Pill label="Buyer" value={ticket.buyerName} icon={User} />
+        )}
+        <Pill label="Ticket ID" value={ticket.id} icon={Tag} />
+        <Pill label="Category" value={ticket.category} icon={Tag} />
+        <Pill label="Event" value={ticket.eventName} icon={Tag} />
+        <Pill label="Scanned at" value={fmtDateTime(audit?.scannedAt || ticket.checkedInAt || undefined)} icon={Clock} />
+        <Pill label="Gate" value={ticket.venue ? `${ticket.venue} / ${ticket.gateName || "Main Gate"}` : (ticket.gateName || "Main Gate")} icon={DoorOpen} />
       </div>
 
       <button
@@ -126,15 +196,18 @@ function SuccessOverlay({
 }
 
 function AlreadyUsedOverlay({
-  payload,
+  ticket,
+  audit,
   onNext,
 }: {
-  payload: ScanPayload;
+  ticket: NonNullable<ScannerValidationResponse["ticket"]>;
+  audit?: ScannerValidationResponse["audit"];
   onNext: () => void;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-amber-950 px-6 text-white animate-in fade-in duration-300">
       <div className="relative mb-8 flex items-center justify-center">
+        <span className="absolute h-48 w-48 animate-ping rounded-full bg-amber-500/20" style={{ animationDuration: "1.5s" }} />
         <div className="flex h-24 w-24 items-center justify-center rounded-full bg-amber-400 shadow-[0_0_60px_rgba(251,191,36,0.5)]">
           <AlertTriangle className="h-12 w-12 text-amber-950" strokeWidth={3} />
         </div>
@@ -144,10 +217,15 @@ function AlreadyUsedOverlay({
       <h2 className="mt-3 text-4xl font-black">ALREADY USED</h2>
       <p className="mt-2 text-center text-sm text-white/60">This ticket was already checked in.</p>
 
-      <div className="mt-8 w-full max-w-sm space-y-2">
-        <Pill label="Ticket ID" value={payload.ticketId ?? "—"} icon={Tag} />
-        <Pill label="First scan at" value={fmtTime(payload.checkedInAt)} icon={Clock} />
-        <Pill label="Gate" value={payload.gateName ?? "Main Gate"} icon={DoorOpen} />
+      <div className="mt-8 w-full max-w-sm space-y-2 max-h-[45vh] overflow-y-auto pr-1">
+        <Pill label="Attendee" value={ticket.attendeeName || "—"} icon={User} />
+        <Pill label="Ticket ID" value={ticket.id} icon={Tag} />
+        <Pill label="Category" value={ticket.category} icon={Tag} />
+        <Pill label="First scan at" value={fmtDateTime(ticket.checkedInAt || undefined)} icon={Clock} />
+        {ticket.checkedInBy && (
+          <Pill label="Checked in by" value={ticket.checkedInBy} icon={User} />
+        )}
+        <Pill label="Gate" value={ticket.gateName || "Main Gate"} icon={DoorOpen} />
       </div>
 
       <div className="mt-10 flex w-full max-w-sm gap-3">
@@ -165,10 +243,14 @@ function AlreadyUsedOverlay({
 }
 
 function InvalidOverlay({
-  payload,
+  code,
+  message,
+  ticket,
   onNext,
 }: {
-  payload: ScanPayload;
+  code: string;
+  message: string;
+  ticket?: ScannerValidationResponse["ticket"];
   onNext: () => void;
 }) {
   return (
@@ -180,12 +262,14 @@ function InvalidOverlay({
       </div>
 
       <p className="text-xs font-black uppercase tracking-[0.3em] text-red-300">Scan Failed</p>
-      <h2 className="mt-3 text-4xl font-black">INVALID TICKET</h2>
-      <p className="mt-2 text-center text-sm text-white/60">{payload.message ?? "This ticket could not be validated."}</p>
+      <h2 className="mt-3 text-4xl font-black">{code}</h2>
+      <p className="mt-2 text-center text-sm text-white/60">{message}</p>
 
-      {payload.ticketId ? (
-        <div className="mt-8 w-full max-w-sm space-y-2">
-          <Pill label="Ticket ID" value={payload.ticketId} icon={Tag} />
+      {ticket ? (
+        <div className="mt-8 w-full max-w-sm space-y-2 max-h-[45vh] overflow-y-auto pr-1">
+          <Pill label="Attendee" value={ticket.attendeeName || "—"} icon={User} />
+          <Pill label="Ticket ID" value={ticket.id} icon={Tag} />
+          <Pill label="Status" value={ticket.status.toUpperCase()} icon={Tag} />
         </div>
       ) : null}
 
@@ -419,15 +503,48 @@ function CameraScanner({ onDetected }: { onDetected: (code: string) => void }) {
 
 // ─── Main Scanner UI ──────────────────────────────────────────────────────────
 
+interface HistoryEntry {
+  ticketId: string;
+  attendeeName: string;
+  timestamp: string;
+  status: string;
+  category: string;
+}
+
 export function ScannerPageUI({ manual = false }: { manual?: boolean }) {
-  const [tab, setTab] = useState<"camera" | "text">(manual ? "text" : "camera");
+  const [tab, setTab] = useState<"camera" | "text" | "history">(manual ? "text" : "camera");
   const [manualInput, setManualInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [overlay, setOverlay] = useState<{ status: ScanStatus; payload: ScanPayload } | null>(null);
-  const [lastResult, setLastResult] = useState<{ status: ScanStatus; payload: ScanPayload } | null>(null);
+  const [overlay, setOverlay] = useState<{ status: ScanStatus; code: string; message: string; ticket?: ScannerValidationResponse["ticket"]; audit?: ScannerValidationResponse["audit"] } | null>(null);
+  const [lastResult, setLastResult] = useState<{ status: ScanStatus; code: string; message: string; ticket?: ScannerValidationResponse["ticket"]; audit?: ScannerValidationResponse["audit"] } | null>(null);
   const [lookupResults, setLookupResults] = useState<TicketDetail[] | null>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("gatepass_scan_history");
+      if (stored) setHistory(JSON.parse(stored) as HistoryEntry[]);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const addToHistory = useCallback((ticket: NonNullable<ScannerValidationResponse["ticket"]>, code: string) => {
+    const entry: HistoryEntry = {
+      ticketId: ticket.id,
+      attendeeName: ticket.attendeeName || "Guest",
+      timestamp: new Date().toISOString(),
+      status: code,
+      category: ticket.category,
+    };
+    setHistory((prev) => {
+      const updated = [entry, ...prev.slice(0, 49)];
+      localStorage.setItem("gatepass_scan_history", JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
 
   const dismissOverlay = useCallback(() => {
     setOverlay(null);
@@ -457,50 +574,37 @@ export function ScannerPageUI({ manual = false }: { manual?: boolean }) {
         body: JSON.stringify(body),
       });
 
-      const raw = (await response.json()) as ScanPayload & { message?: string };
-      const status = normalizeStatus(raw.status ?? (response.ok ? "VALID" : "INVALID"));
+      const payload = (await response.json()) as ScannerValidationResponse;
+      const status = normalizeStatus(payload.code || (response.ok ? "VALID" : "INVALID"));
 
-      // Enrich with ticket details if we have a ticketId
-      let enriched: ScanPayload = { ...raw };
-      if (raw.ticketId) {
-        try {
-          const ticketRes = await fetch(`/api/scanner/manual-lookup`, {
-            method: "POST",
-            headers: { "content-type": "application/json", "x-gatepass-role": "OWNER" },
-            body: JSON.stringify({ query: raw.ticketId }),
-          });
-          const ticketData = await ticketRes.json() as { items?: TicketDetail[] };
-          const match = ticketData.items?.[0];
-          if (match) {
-            enriched = {
-              ...enriched,
-              attendeeName: match.attendeeName,
-              eventTitle: match.eventId,
-            };
-          }
-        } catch {
-          // enrichment optional
-        }
-      }
-
-      const result = { status, payload: enriched };
+      const result = {
+        status,
+        code: payload.code || (response.ok ? "VALID" : "INVALID"),
+        message: payload.message || "",
+        ticket: payload.ticket,
+        audit: payload.audit,
+      };
       setLastResult(result);
+
+      if (payload.ticket) {
+        addToHistory(payload.ticket, payload.code);
+      }
 
       if (status === "success" || status === "already_used" || status === "invalid") {
         setOverlay(result);
       }
     } catch (err) {
-      const payload: ScanPayload = {
-        status: "error",
+      const result = {
+        status: "error" as ScanStatus,
+        code: "SERVER_ERROR",
         message: err instanceof Error ? err.message : "Network error. Check connection.",
       };
-      const result = { status: "error" as ScanStatus, payload };
       setLastResult(result);
       setOverlay(result);
     } finally {
       setSubmitting(false);
     }
-  }, [submitting]);
+  }, [submitting, addToHistory]);
 
   // ── Manual lookup (search, not validate) ─────────────────────────────────
   const submitManualLookup = useCallback(async () => {
@@ -532,14 +636,14 @@ export function ScannerPageUI({ manual = false }: { manual?: boolean }) {
 
   // ── Overlay rendering ─────────────────────────────────────────────────────
   if (overlay) {
-    if (overlay.status === "success") {
-      return <SuccessOverlay payload={overlay.payload} onNext={dismissOverlay} />;
+    if (overlay.status === "success" && overlay.ticket) {
+      return <SuccessOverlay ticket={overlay.ticket} audit={overlay.audit} onNext={dismissOverlay} />;
     }
-    if (overlay.status === "already_used") {
-      return <AlreadyUsedOverlay payload={overlay.payload} onNext={dismissOverlay} />;
+    if (overlay.status === "already_used" && overlay.ticket) {
+      return <AlreadyUsedOverlay ticket={overlay.ticket} audit={overlay.audit} onNext={dismissOverlay} />;
     }
     if (overlay.status === "invalid" || overlay.status === "error") {
-      return <InvalidOverlay payload={overlay.payload} onNext={dismissOverlay} />;
+      return <InvalidOverlay code={overlay.code} message={overlay.message} ticket={overlay.ticket} onNext={dismissOverlay} />;
     }
   }
 
@@ -548,33 +652,49 @@ export function ScannerPageUI({ manual = false }: { manual?: boolean }) {
     <main className="min-h-screen bg-zinc-950 px-4 py-8 text-white md:px-8">
       <div className="mx-auto max-w-lg">
         {/* Header */}
-        <div className="mb-6">
-          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-400">
-            GatePass · Mobile Web Scanner
-          </p>
-          <h1 className="mt-2 text-4xl font-black tracking-tight">
-            {manual ? "Manual Lookup" : "Scanner"}
-          </h1>
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-400">
+              GatePass · Event Operations
+            </p>
+            <h1 className="mt-2 text-4xl font-black tracking-tight">
+              {manual ? "Manual Lookup" : "Gate Scanner"}
+            </h1>
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-black uppercase text-emerald-400 border border-emerald-400/20">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Gate Main
+            </span>
+            <span className="text-[9px] font-bold text-white/40">Device: Web-Scanner-01</span>
+          </div>
         </div>
 
         {/* Tabs */}
         {!manual && (
           <div className="mb-5 flex gap-2 rounded-2xl bg-white/5 p-1">
-            {(["camera", "text"] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTab(t)}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-black uppercase tracking-wider transition-all ${
-                  tab === t
-                    ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
-                    : "text-white/50 hover:text-white/80"
-                }`}
-              >
-                {t === "camera" ? <Camera className="h-4 w-4" /> : <Search className="h-4 w-4" />}
-                {t === "camera" ? "Camera Scan" : "Text Lookup"}
-              </button>
-            ))}
+            {([
+              { id: "camera", name: "Camera Scan", icon: Camera },
+              { id: "text", name: "Text Lookup", icon: Search },
+              { id: "history", name: "History", icon: Clock }
+            ] as const).map((t) => {
+              const TabIcon = t.icon;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTab(t.id)}
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-black uppercase tracking-wider transition-all ${
+                    tab === t.id
+                      ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
+                      : "text-white/50 hover:text-white/80"
+                  }`}
+                >
+                  <TabIcon className="h-4 w-4 shrink-0" />
+                  {t.name}
+                </button>
+              );
+            })}
           </div>
         )}
 
@@ -661,9 +781,12 @@ export function ScannerPageUI({ manual = false }: { manual?: boolean }) {
                       className="rounded-[24px] border border-white/10 bg-white/[0.055] p-4 space-y-3"
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-black text-sm">{ticket.attendeeName}</p>
-                          <p className="text-xs text-white/50 mt-0.5">{ticket.attendeeEmail}</p>
+                        <div className="min-w-0">
+                          <p className="font-black text-sm truncate">{ticket.attendeeName}</p>
+                          <p className="text-xs text-white/50 mt-0.5 truncate">{ticket.attendeeEmail}</p>
+                          <p className="text-[10px] text-white/40 mt-1 font-bold truncate">
+                            {ticket.eventId || "Demo Event"}
+                          </p>
                         </div>
                         <span className={`shrink-0 rounded-full border px-3 py-1 text-xs font-black uppercase tracking-wider ${
                           ticket.status === "active" || ticket.status === "issued"
@@ -672,7 +795,7 @@ export function ScannerPageUI({ manual = false }: { manual?: boolean }) {
                             ? "border-amber-400/30 bg-amber-400/10 text-amber-300"
                             : "border-red-400/30 bg-red-400/10 text-red-300"
                         }`}>
-                          {ticket.status}
+                          {ticket.status === "checked_in" || ticket.status === "used" ? "USED" : ticket.status}
                         </span>
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-xs">
@@ -711,6 +834,56 @@ export function ScannerPageUI({ manual = false }: { manual?: boolean }) {
           </div>
         )}
 
+        {/* History Tab */}
+        {tab === "history" && !manual && (
+          <div className="space-y-4">
+            <div className="rounded-[24px] border border-white/10 bg-white/[0.055] p-4">
+              <div className="flex items-center justify-between mb-3 border-b border-white/10 pb-2">
+                <h3 className="text-xs font-black uppercase tracking-widest text-white/50">Recent Scans</h3>
+                {history.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHistory([]);
+                      localStorage.removeItem("gatepass_scan_history");
+                    }}
+                    className="text-[10px] uppercase font-bold text-red-400 hover:text-red-300 transition-colors"
+                  >
+                    Clear History
+                  </button>
+                )}
+              </div>
+              
+              {history.length === 0 ? (
+                <div className="text-center text-xs text-white/30 py-8">No scan attempts recorded yet</div>
+              ) : (
+                <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+                  {history.map((entry, idx) => (
+                    <div key={idx} className="flex items-center justify-between rounded-xl bg-black/35 p-3 border border-white/5">
+                      <div className="min-w-0">
+                        <p className="font-bold text-sm truncate">{entry.attendeeName}</p>
+                        <p className="text-[10px] text-white/40 mt-0.5 truncate">ID: {entry.ticketId} · {entry.category}</p>
+                      </div>
+                      <div className="text-right shrink-0 ml-3">
+                        <span className={`inline-block rounded px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${
+                          entry.status === "VALID"
+                            ? "bg-emerald-400/10 text-emerald-300 border border-emerald-400/20"
+                            : entry.status === "ALREADY_CHECKED_IN"
+                            ? "bg-amber-400/10 text-amber-300 border border-amber-400/20"
+                            : "bg-red-400/10 text-red-300 border border-red-400/20"
+                        }`}>
+                          {entry.status === "VALID" ? "VALID" : entry.status === "ALREADY_CHECKED_IN" ? "USED" : "INVALID"}
+                        </span>
+                        <p className="text-[9px] text-white/30 mt-1">{fmtTime(entry.timestamp)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Last result mini-card (persists between scans) */}
         {lastResult && !overlay && (
           <div className={`mt-5 rounded-2xl border p-4 ${
@@ -731,19 +904,22 @@ export function ScannerPageUI({ manual = false }: { manual?: boolean }) {
               )}
             </div>
             <p className="font-black text-sm">
-              {lastResult.status === "success" ? "✅ Entry Allowed" : lastResult.status === "already_used" ? "⚠️ Already Used" : "❌ Invalid"}
+              {lastResult.status === "success" ? "✅ Entry Allowed" : lastResult.status === "already_used" ? "⚠️ Already Checked-In" : "❌ Scan Rejected"}
             </p>
-            {lastResult.payload.ticketId && (
-              <p className="mt-1 text-xs text-white/50">Ticket: {lastResult.payload.ticketId}</p>
+            {lastResult.ticket && (
+              <div className="mt-2 space-y-1 text-xs text-white/50">
+                <p>Attendee: <strong className="text-white font-semibold">{lastResult.ticket.attendeeName}</strong></p>
+                <p>ID: <strong className="text-white font-semibold">{lastResult.ticket.id}</strong> ({lastResult.ticket.category})</p>
+                {lastResult.status === "already_used" && lastResult.ticket.checkedInAt && (
+                  <p>Used at: <strong className="text-amber-300 font-semibold">{fmtDateTime(lastResult.ticket.checkedInAt)}</strong></p>
+                )}
+                {lastResult.status === "success" && lastResult.audit && (
+                  <p>Checked in: <strong className="text-emerald-300 font-semibold">{fmtTime(lastResult.audit.scannedAt)}</strong></p>
+                )}
+              </div>
             )}
-            {lastResult.payload.attendeeName && (
-              <p className="text-xs text-white/50">Attendee: {lastResult.payload.attendeeName}</p>
-            )}
-            {lastResult.payload.checkedInAt && (
-              <p className="text-xs text-white/50">At: {fmtTime(lastResult.payload.checkedInAt)}</p>
-            )}
-            {lastResult.payload.message && lastResult.status !== "success" && (
-              <p className="text-xs text-white/50 mt-1">{lastResult.payload.message}</p>
+            {lastResult.message && lastResult.status !== "success" && lastResult.status !== "already_used" && (
+              <p className="text-xs text-red-300 mt-2 font-medium">{lastResult.message}</p>
             )}
           </div>
         )}
