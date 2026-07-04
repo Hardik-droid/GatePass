@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseJson, withErrorHandling } from "@/backend/core/http";
 import { authEmailSchema } from "@/backend/core/schemas";
-import { getServerSession, setSessionCookie, clearSessionCookie } from "@/authO/lib/server/session";
-import { getNeonAuth, isNeonAuthConfigured } from "@/authO/lib/server/neon-auth";
+import { getServerSession, setSessionCookie, clearSessionCookie, getNeonAuth, isNeonAuthConfigured } from "@/authO/lib/server/session";
 
 function safeRedirect(value?: string) {
   if (!value || !value.startsWith("/") || value.startsWith("//")) return "/app";

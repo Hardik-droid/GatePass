@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { setSessionCookie } from "@/authO/lib/server/session";
-import { isDevAuthEnabled } from "@/utils/env";
-import { isNeonAuthConfigured } from "@/authO/lib/server/neon-auth";
+import { setSessionCookie, isNeonAuthConfigured } from "@/authO/lib/server/session";
+import { isDevAuthEnabled } from "@/utils/supabase/env";
 
 type Params = { provider: string };
 

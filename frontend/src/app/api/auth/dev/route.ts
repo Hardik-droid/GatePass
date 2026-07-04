@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isDevAuthEnabled } from "@/utils/env";
+import { isDevAuthEnabled } from "@/utils/supabase/env";
 import { clearSessionCookie, setSessionCookie } from "@/authO/lib/server/session";
 
 function safeRedirect(value?: string) {

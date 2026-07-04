@@ -1,5 +1,5 @@
+import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { createId, nowIso } from "./ids";
-import { deleteStateRow, getStateProvider, loadStateRows, upsertStateRows, upsertStateRow } from "../db/state";
 
 type Row = Record<string, any>;
 
@@ -73,6 +73,176 @@ type StoreKey =
   | "walletPassRegistrations"
   | "userWalletPreferences"
   | "gatepassRequests";
+
+type StateRow = {
+  entity_type: string;
+  entity_id: string;
+  payload: Record<string, unknown>;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+let sqlClient: NeonQueryFunction<false, false> | null = null;
+let schemaReady: Promise<void> | null = null;
+
+function isProductionBuild() {
+  return process.env.NODE_ENV === "production" && process.env.NEXT_PHASE === "phase-production-build";
+}
+
+function getNeonDatabaseUrl() {
+  return process.env.NEON_DATABASE_URL || process.env.DATABASE_URL || "";
+}
+
+function isNeonConfigured() {
+  return Boolean(getNeonDatabaseUrl());
+}
+
+function getStateProvider() {
+  return isNeonConfigured() ? "neon" : "unconfigured";
+}
+
+function getNeonSql() {
+  const databaseUrl = getNeonDatabaseUrl();
+  if (!databaseUrl) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("Neon database is not configured");
+    }
+    return null;
+  }
+
+  sqlClient ??= neon(databaseUrl);
+  return sqlClient;
+}
+
+async function ensureNeonSchema() {
+  const sql = getNeonSql();
+  if (!sql) return;
+
+  schemaReady ??= (async () => {
+    await sql.query(`
+      create table if not exists public.gatepass_state (
+        entity_type text not null,
+        entity_id text not null,
+        payload jsonb not null,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now(),
+        primary key (entity_type, entity_id)
+      )
+    `);
+
+    await sql.query(`
+      create table if not exists public.users_profile (
+        id text primary key,
+        name text,
+        email text,
+        phone text,
+        avatar_url text,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now()
+      )
+    `);
+
+    await sql.query(`
+      create index if not exists gatepass_state_entity_type_idx
+      on public.gatepass_state (entity_type, created_at)
+    `);
+  })();
+
+  await schemaReady;
+}
+
+async function checkNeonConnection() {
+  const sql = getNeonSql();
+  if (!sql) return { configured: false, ok: false, error: "DATABASE_URL is not configured" };
+
+  try {
+    await ensureNeonSchema();
+    const [row] = await sql.query("select current_database() as database_name, current_user as database_user");
+    return {
+      configured: true,
+      ok: true,
+      databaseName: typeof row?.database_name === "string" ? row.database_name : undefined,
+      databaseUser: typeof row?.database_user === "string" ? row.database_user : undefined,
+    };
+  } catch (error) {
+    return {
+      configured: true,
+      ok: false,
+      error: error instanceof Error ? error.message : "Unknown Neon connection error",
+    };
+  }
+}
+
+export async function checkStateProvider() {
+  if (getStateProvider() === "neon") return { provider: "neon", ...(await checkNeonConnection()) };
+  return { provider: "unconfigured", configured: false, ok: false, error: "NEON_DATABASE_URL or DATABASE_URL is not configured" };
+}
+
+async function loadStateRows() {
+  if (!isNeonConfigured() && isProductionBuild()) return [] as StateRow[];
+  const sql = getNeonSql();
+  if (!sql) return [] as StateRow[];
+
+  await ensureNeonSchema();
+  return (await sql.query(`
+      select entity_type, entity_id, payload, created_at, updated_at
+      from public.gatepass_state
+      order by created_at asc
+    `)) as StateRow[];
+}
+
+async function upsertStateRow(entityType: string, entityId: string, payload: Record<string, unknown>) {
+  if (!isNeonConfigured() && isProductionBuild()) return;
+  const sql = getNeonSql();
+  if (!sql) return;
+
+  await ensureNeonSchema();
+  await sql.query(
+    `
+      insert into public.gatepass_state (entity_type, entity_id, payload, updated_at)
+      values ($1, $2, $3::jsonb, now())
+      on conflict (entity_type, entity_id)
+      do update set payload = excluded.payload, updated_at = now()
+    `,
+    [entityType, entityId, JSON.stringify(payload)],
+  );
+}
+
+async function upsertStateRows(rows: Array<{ entityType: string; entityId: string; payload: Record<string, unknown> }>) {
+  if (!isNeonConfigured() && isProductionBuild()) return;
+  const sql = getNeonSql();
+  if (!sql || !rows.length) return;
+
+  await ensureNeonSchema();
+  await sql.transaction(
+    rows.map((row) =>
+      sql.query(
+        `
+          insert into public.gatepass_state (entity_type, entity_id, payload, updated_at)
+          values ($1, $2, $3::jsonb, now())
+          on conflict (entity_type, entity_id)
+          do update set payload = excluded.payload, updated_at = now()
+        `,
+        [row.entityType, row.entityId, JSON.stringify(row.payload)],
+      ),
+    ),
+  );
+}
+
+async function deleteStateRow(entityType: string, entityId: string) {
+  if (!isNeonConfigured() && isProductionBuild()) return;
+  const sql = getNeonSql();
+  if (!sql) return;
+
+  await ensureNeonSchema();
+  await sql.query(
+    `
+      delete from public.gatepass_state
+      where entity_type = $1 and entity_id = $2
+    `,
+    [entityType, entityId],
+  );
+}
 
 function createBaseStore() {
   return {

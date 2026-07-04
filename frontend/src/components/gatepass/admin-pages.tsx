@@ -5,6 +5,7 @@ import { startTransition, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell, AttendanceChart, AuditTimeline, EmptyState, MapPanel, MetricsGrid, OrdersTable, RevenueChart, ScannerResult, StatusBadge, TicketLifecycle } from "@/components/gatepass/admin-components";
 import { auditEvents, ticketCategories } from "@/lib/mock-data";
+import { isDevAuthEnabled } from "@/utils/supabase/env";
 
 export function DashboardOverview() {
   return (
@@ -78,7 +79,21 @@ export function BuilderPage() {
     }
   }
 
+  async function ensureLocalOwnerSession() {
+    if (typeof window === "undefined") return;
+    const host = window.location.hostname;
+    if (host !== "localhost" && host !== "127.0.0.1" && !host.endsWith(".local")) return;
+    try {
+      await fetch("/api/auth/dev?redirect=/dashboard/events/new&role=owner&email=owner@gatepass.local", {
+        method: "POST",
+      });
+    } catch {
+      // Ignore dev-auth failures; submitEvent still retries on demand.
+    }
+  }
+
   useEffect(() => {
+    void ensureLocalOwnerSession();
     void loadEvents();
   }, []);
 
@@ -89,17 +104,26 @@ export function BuilderPage() {
     setCreatedEvent(null);
 
     try {
-      const response = await fetch("/api/events", {
+      const payloadBody = JSON.stringify({
+        ...form,
+        startTime: form.startTime ? new Date(form.startTime).toISOString() : undefined,
+      });
+      const requestOptions = {
         method: "POST",
         headers: {
           "content-type": "application/json",
           "idempotency-key": crypto.randomUUID(),
         },
-        body: JSON.stringify({
-          ...form,
-          startTime: form.startTime ? new Date(form.startTime).toISOString() : undefined,
-        }),
-      });
+        body: payloadBody,
+      } as const;
+
+      let response = await fetch("/api/events", requestOptions);
+      if (!response.ok && (response.status === 401 || response.status === 403) && isDevAuthEnabled()) {
+        await fetch(`/api/auth/dev?redirect=/dashboard/events/new&role=owner&email=owner@gatepass.local`, {
+          method: "POST",
+        });
+        response = await fetch("/api/events", requestOptions);
+      }
 
       const payload = await response.json();
       if (!response.ok) {

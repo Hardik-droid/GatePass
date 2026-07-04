@@ -8,7 +8,7 @@ import { scannerValidateSchema } from "@/backend/core/schemas";
 import { requireApiPermission } from "@/backend/modules/auth";
 import { withIdempotency } from "@/backend/modules/idempotency";
 import { validateScan } from "@/backend/modules/scanner";
-import { isDevAuthEnabled } from "@/utils/env";
+import { isDevAuthEnabled } from "@/utils/supabase/env";
 
 export async function POST(request: NextRequest) {
   return withErrorHandling(async () => {

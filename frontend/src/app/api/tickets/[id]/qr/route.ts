@@ -2,7 +2,7 @@ import { HttpError, withErrorHandling } from "@/backend/core/http";
 import { getSession, requireTicketAccess } from "@/backend/modules/auth";
 import { generateQrSvgOrDataUrl } from "@/backend/modules/qr-service";
 import { getTicket } from "@/backend/modules/tickets";
-import { isDevAuthEnabled } from "@/utils/env";
+import { isDevAuthEnabled } from "@/utils/supabase/env";
 
 export async function GET(
   _request: Request,

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { isDevAuthEnabled } from "@/utils/env";
+import { isDevAuthEnabled } from "@/utils/supabase/env";
 
 export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const searchParams = useSearchParams();

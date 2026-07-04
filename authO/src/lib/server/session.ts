@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { cookies } from "next/headers";
-import { isDevAuthEnabled } from "@/utils/env";
-import { getNeonServerSession, isNeonAuthConfigured } from "./neon-auth";
+import { createNeonAuth, type NeonAuth } from "@neondatabase/auth/next/server";
+import { isDevAuthEnabled } from "@/utils/supabase/env";
 
 export type GatePassSession = {
   userId: string;
@@ -13,6 +13,7 @@ export type GatePassSession = {
 };
 
 const COOKIE_NAME = "gatepass_session";
+let neonAuth: NeonAuth | null = null;
 
 function secret() {
   const value = process.env.SESSION_SIGNING_SECRET || process.env.WALLET_LINK_SIGNING_SECRET;
@@ -60,6 +61,75 @@ export async function getServerSession() {
   return legacySession;
 }
 
+export function isNeonAuthConfigured() {
+  return Boolean(process.env.NEON_AUTH_BASE_URL && process.env.NEON_AUTH_COOKIE_SECRET);
+}
+
+export function getNeonAuthConfigStatus() {
+  const cookieSecret = process.env.NEON_AUTH_COOKIE_SECRET ?? "";
+  return {
+    configured: isNeonAuthConfigured(),
+    hasBaseUrl: Boolean(process.env.NEON_AUTH_BASE_URL),
+    hasCookieSecret: Boolean(process.env.NEON_AUTH_COOKIE_SECRET),
+    cookieSecretLengthOk: cookieSecret.length >= 32,
+  };
+}
+
+export function getNeonAuth() {
+  if (!isNeonAuthConfigured()) return null;
+
+  neonAuth ??= createNeonAuth({
+    baseUrl: process.env.NEON_AUTH_BASE_URL!,
+    cookies: {
+      secret: process.env.NEON_AUTH_COOKIE_SECRET!,
+      sameSite: "lax",
+    },
+    logLevel: process.env.NODE_ENV === "production" ? "warn" : "error",
+  });
+
+  return neonAuth;
+}
+
+type NeonSessionUser = {
+  id?: string;
+  email?: string;
+  name?: string | null;
+  role?: string | null;
+  phoneNumber?: string | null;
+  phone?: string | null;
+};
+
+type NeonSessionData = {
+  user?: NeonSessionUser | null;
+};
+
+type GatePassRole = "attendee" | "owner" | "scanner";
+
+function isSessionResponse(value: unknown): value is { data?: NeonSessionData | null; error?: unknown } {
+  return Boolean(value && typeof value === "object" && "data" in value);
+}
+
+export async function getNeonServerSession() {
+  const auth = getNeonAuth();
+  if (!auth) return null;
+
+  const result = (await auth.getSession()) as unknown;
+  const data = isSessionResponse(result) ? result.data : (result as NeonSessionData | null);
+  const user = data?.user;
+  if (!user?.id || !user.email) return null;
+
+  const role: GatePassRole = user.role === "owner" || user.role === "scanner" ? user.role : "attendee";
+
+  return {
+    userId: user.id,
+    email: user.email,
+    name: user.name ?? undefined,
+    provider: "email" as const,
+    role,
+    phone: user.phoneNumber ?? user.phone ?? undefined,
+  };
+}
+
 type CookieWritableResponse = {
   cookies: {
     set(name: string, value: string, options: Record<string, unknown>): void;
@@ -84,8 +154,4 @@ export function clearSessionCookie(response: CookieWritableResponse) {
     path: "/",
     maxAge: 0,
   });
-}
-
-function roleFromMetadata(value: unknown): GatePassSession["role"] {
-  return value === "owner" || value === "scanner" ? value : "attendee";
 }

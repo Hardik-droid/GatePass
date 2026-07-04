@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { checkStateProvider } from "@/backend/db/state";
-import { ensureStoreReady } from "@/backend/core/store";
+import { checkStateProvider, ensureStoreReady } from "@/backend/core/store";
 
 export const runtime = "nodejs";
 
