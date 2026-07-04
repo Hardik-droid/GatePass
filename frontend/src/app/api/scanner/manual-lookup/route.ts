@@ -3,7 +3,7 @@ import { withErrorHandling } from "@/backend/core/http";
 import { requireApiPermission } from "@/backend/modules/auth";
 import { listTickets, serializeTicket } from "@/backend/modules/tickets";
 import { getStore } from "@/backend/core/store";
-import { isDevAuthEnabled } from "@/utils/supabase/env";
+import { isDevAuthEnabled } from "@/utils/env";
 
 export async function POST(request: NextRequest) {
   return withErrorHandling(async () => {

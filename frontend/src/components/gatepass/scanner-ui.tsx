@@ -69,19 +69,6 @@ interface ScannerValidationResponse {
   };
 }
 
-interface ScanPayload {
-  status: string;
-  message?: string;
-  ticketId?: string;
-  attendeeName?: string;
-  categoryName?: string;
-  checkedInAt?: string;
-  gateName?: string;
-  scannerStaffName?: string;
-  deviceId?: string;
-  eventTitle?: string;
-}
-
 interface TicketDetail {
   id: string;
   attendeeName: string;
@@ -197,11 +184,9 @@ function SuccessOverlay({
 
 function AlreadyUsedOverlay({
   ticket,
-  audit,
   onNext,
 }: {
   ticket: NonNullable<ScannerValidationResponse["ticket"]>;
-  audit?: ScannerValidationResponse["audit"];
   onNext: () => void;
 }) {
   return (
@@ -295,9 +280,9 @@ function CameraScanner({ onDetected }: { onDetected: (code: string) => void }) {
   const detectorRef = useRef<BarcodeDetector | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [scanning, setScanning] = useState(false);
   const lastDetectedRef = useRef<string>("");
   const cooldownRef = useRef(false);
+  const scanning = cameraActive;
 
   const stopCamera = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -306,7 +291,6 @@ function CameraScanner({ onDetected }: { onDetected: (code: string) => void }) {
       streamRef.current = null;
     }
     setCameraActive(false);
-    setScanning(false);
   }, []);
 
   const startCamera = useCallback(async () => {
@@ -339,7 +323,6 @@ function CameraScanner({ onDetected }: { onDetected: (code: string) => void }) {
   // Frame scanning loop
   useEffect(() => {
     if (!cameraActive) return;
-    setScanning(true);
 
     const tick = async () => {
       const video = videoRef.current;
@@ -520,16 +503,15 @@ export function ScannerPageUI({ manual = false }: { manual?: boolean }) {
   const [lookupResults, setLookupResults] = useState<TicketDetail[] | null>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-
-  useEffect(() => {
+  const [history, setHistory] = useState<HistoryEntry[]>(() => {
+    if (typeof window === "undefined") return [];
     try {
       const stored = localStorage.getItem("gatepass_scan_history");
-      if (stored) setHistory(JSON.parse(stored) as HistoryEntry[]);
+      return stored ? (JSON.parse(stored) as HistoryEntry[]) : [];
     } catch {
-      // ignore
+      return [];
     }
-  }, []);
+  });
 
   const addToHistory = useCallback((ticket: NonNullable<ScannerValidationResponse["ticket"]>, code: string) => {
     const entry: HistoryEntry = {
@@ -640,7 +622,7 @@ export function ScannerPageUI({ manual = false }: { manual?: boolean }) {
       return <SuccessOverlay ticket={overlay.ticket} audit={overlay.audit} onNext={dismissOverlay} />;
     }
     if (overlay.status === "already_used" && overlay.ticket) {
-      return <AlreadyUsedOverlay ticket={overlay.ticket} audit={overlay.audit} onNext={dismissOverlay} />;
+      return <AlreadyUsedOverlay ticket={overlay.ticket} onNext={dismissOverlay} />;
     }
     if (overlay.status === "invalid" || overlay.status === "error") {
       return <InvalidOverlay code={overlay.code} message={overlay.message} ticket={overlay.ticket} onNext={dismissOverlay} />;

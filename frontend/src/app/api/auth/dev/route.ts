@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { createClient as createSupabaseServerClient } from "@/utils/supabase/server";
-import { isDevAuthEnabled } from "@/utils/supabase/env";
+import { isDevAuthEnabled } from "@/utils/env";
 import { clearSessionCookie, setSessionCookie } from "@/authO/lib/server/session";
 
 function safeRedirect(value?: string) {
@@ -19,14 +17,6 @@ export async function POST(request: NextRequest) {
   const email = searchParams.get("email") || "owner@gatepass.local";
   const name = searchParams.get("name") || "Dev Owner";
   const role = searchParams.get("role") === "scanner" ? "scanner" : searchParams.get("role") === "attendee" ? "attendee" : "owner";
-
-  const cookieStore = await cookies();
-  const supabase = createSupabaseServerClient(cookieStore);
-  try {
-    await supabase.auth.signOut();
-  } catch {
-    // Ignore sign-out failures in dev bypass mode.
-  }
 
   const response = NextResponse.json({ ok: true, redirectTo, devMode: true });
   clearSessionCookie(response);

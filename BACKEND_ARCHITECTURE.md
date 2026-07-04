@@ -14,7 +14,7 @@ The frontend should treat this backend as an HTTP API. It should not import back
 - Validation: Pydantic v2
 - Local server: Uvicorn
 - Dev persistence: in-memory store in `backend/app/core/store.py`
-- Production persistence target: Supabase Postgres using the existing SQL migration in `supabase/migrations`
+- Production persistence target: Neon Postgres
 
 ## Folder Structure
 
@@ -67,7 +67,7 @@ x-gatepass-role: FINANCE_MANAGER
 x-gatepass-role: SCANNER_STAFF
 ```
 
-Production should replace this with Supabase Auth JWT validation. The permission model is centralized in `backend/app/core/security.py`.
+Production should replace this with Neon Auth session/JWT validation. The permission model is centralized in `backend/app/core/security.py`.
 
 Important rules enforced by backend services:
 
@@ -236,9 +236,9 @@ POST /api/gps/log-location
 
 ## Production Migration Plan
 
-1. Replace `backend/app/core/store.py` with Supabase repository classes.
-2. Validate Supabase JWTs in `security.py`.
-3. Enforce RLS policies in Supabase and keep server-side authorization checks.
+1. Replace `backend/app/core/store.py` with Neon Postgres repository classes if the FastAPI service becomes the primary backend.
+2. Validate Neon Auth sessions/JWTs in `security.py`.
+3. Enforce database-level policies where applicable and keep server-side authorization checks.
 4. Implement real Razorpay order creation and webhook signature verification.
 5. Implement real Resend email delivery and retry worker.
 6. Add pytest service/API tests.

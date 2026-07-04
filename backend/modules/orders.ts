@@ -5,7 +5,7 @@ import { queueNotification } from "./notifications";
 import { createSecureQrToken, hashQrToken } from "./qr-service";
 import { serializeTicket } from "./tickets";
 import { prepareWalletPasses } from "./wallet-service";
-import { isDevAuthEnabled } from "@/utils/supabase/env";
+import { isDevAuthEnabled } from "@/utils/env";
 
 type OrderItem = {
   ticketCategoryId?: string;

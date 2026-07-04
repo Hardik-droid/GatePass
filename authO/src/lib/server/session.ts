@@ -1,8 +1,7 @@
 import crypto from "node:crypto";
 import { cookies } from "next/headers";
-import type { User } from "@supabase/supabase-js";
-import { createClient as createSupabaseServerClient } from "@/utils/supabase/server";
-import { hasSupabaseAuthConfig, isDevAuthEnabled } from "@/utils/supabase/env";
+import { isDevAuthEnabled } from "@/utils/env";
+import { getNeonServerSession, isNeonAuthConfigured } from "./neon-auth";
 
 export type GatePassSession = {
   userId: string;
@@ -46,13 +45,10 @@ export function decodeSession(value?: string) {
 export async function getServerSession() {
   const cookieStore = await cookies();
 
-  if (hasSupabaseAuthConfig()) {
+  if (isNeonAuthConfigured()) {
     try {
-      const supabase = createSupabaseServerClient(cookieStore);
-      const { data } = await supabase.auth.getUser();
-      if (data.user) {
-        return sessionFromSupabaseUser(data.user);
-      }
+      const neonSession = await getNeonServerSession();
+      if (neonSession) return neonSession;
     } catch {
       if (!isDevAuthEnabled()) return null;
     }
@@ -88,26 +84,6 @@ export function clearSessionCookie(response: CookieWritableResponse) {
     path: "/",
     maxAge: 0,
   });
-}
-
-export function isSupabaseAuthConfigured() {
-  return hasSupabaseAuthConfig();
-}
-
-function sessionFromSupabaseUser(user: User): GatePassSession {
-  const metadata = (user.user_metadata ?? {}) as Record<string, unknown>;
-  const appMetadata = (user.app_metadata ?? {}) as Record<string, unknown>;
-  const role = roleFromMetadata(metadata.role ?? appMetadata.role);
-  const provider = appMetadata.provider === "google" || appMetadata.provider === "apple" ? appMetadata.provider : "email";
-
-  return {
-    userId: user.id,
-    email: user.email || "",
-    name: String(metadata.name ?? metadata.full_name ?? ""),
-    provider,
-    role,
-    phone: user.phone || (typeof metadata.phone === "string" && metadata.phone.length ? metadata.phone : undefined),
-  };
 }
 
 function roleFromMetadata(value: unknown): GatePassSession["role"] {

@@ -62,7 +62,7 @@ Local dev can issue tickets, generate signed QR tokens, prepare wallet pass reco
 - Configure QR and wallet signing secrets.
 - Configure Apple Pass Type ID, team ID, certificate, password, WWDR cert, and web service URL.
 - Configure Google issuer ID, service account email, private key, class suffix, and origin.
-- Run Supabase migration `002_wallet_passes.sql`.
+- Verify Neon-backed state persistence before wallet production rollout.
 - Verify booking creates ticket, QR, email preview/outbox, wallet pass records, and audit events.
 - Verify scanner returns `VALID` once and `ALREADY USED` on duplicate scan.
 - Verify cancelled/refunded/expired tickets are rejected.

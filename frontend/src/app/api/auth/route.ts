@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { parseJson, withErrorHandling } from "@/backend/core/http";
 import { authEmailSchema } from "@/backend/core/schemas";
-import { getServerSession, isSupabaseAuthConfigured, setSessionCookie, clearSessionCookie } from "@/authO/lib/server/session";
-import { upsertUserProfile } from "@/backend/db/supabase";
-import { createClient as createSupabaseServerClient } from "@/utils/supabase/server";
+import { getServerSession, setSessionCookie, clearSessionCookie } from "@/authO/lib/server/session";
+import { getNeonAuth, isNeonAuthConfigured } from "@/authO/lib/server/neon-auth";
 
 function safeRedirect(value?: string) {
   if (!value || !value.startsWith("/") || value.startsWith("//")) return "/app";
@@ -23,38 +21,27 @@ export async function POST(request: NextRequest) {
     const payload = await parseJson(request, authEmailSchema);
     const redirectTo = safeRedirect(payload.redirectTo);
 
-    if (isSupabaseAuthConfigured()) {
-      const cookieStore = await cookies();
-      const supabase = createSupabaseServerClient(cookieStore);
+    if (isNeonAuthConfigured()) {
+      const auth = getNeonAuth();
+      if (!auth) throw new Error("Neon Auth is not configured");
       const result =
         payload.mode === "signup"
-          ? await supabase.auth.signUp({
+          ? await auth.signUp.email({
               email: payload.email,
               password: payload.password,
-              options: { data: { name: payload.name || payload.email.split("@")[0] } },
+              name: payload.name || payload.email.split("@")[0],
             })
-          : await supabase.auth.signInWithPassword({ email: payload.email, password: payload.password });
+          : await auth.signIn.email({ email: payload.email, password: payload.password });
 
-      if (result.error) throw new Error(result.error.message);
-      if (!result.data.user) {
-        return NextResponse.json({
-          ok: true,
-          needsConfirmation: true,
-          message: "Check your email to confirm your GatePass account.",
-        });
+      if (result && "error" in result && result.error) {
+        throw new Error(result.error.message || "Neon authentication failed");
       }
 
-      const response = NextResponse.json({ ok: true, redirectTo });
-      await upsertUserProfile({
-        id: result.data.user.id,
-        name: String(result.data.user.user_metadata?.name ?? payload.name ?? ""),
-        email: result.data.user.email || payload.email,
-      });
-      return response;
+      return NextResponse.json({ ok: true, redirectTo, provider: "neon" });
     }
 
     if (process.env.NEXT_PUBLIC_ENABLE_DEV_AUTH !== "true") {
-      return NextResponse.json({ message: "Authentication provider is not configured" }, { status: 503 });
+      return NextResponse.json({ message: "Neon Auth is not configured" }, { status: 503 });
     }
 
     const response = NextResponse.json({ ok: true, redirectTo, devMode: true });
@@ -76,11 +63,6 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE() {
   const response = NextResponse.json({ ok: true, redirectTo: "/login" });
-  if (isSupabaseAuthConfigured()) {
-    const cookieStore = await cookies();
-    const supabase = createSupabaseServerClient(cookieStore);
-    await supabase.auth.signOut();
-  }
   clearSessionCookie(response);
   return response;
 }

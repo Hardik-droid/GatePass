@@ -1,19 +1,24 @@
 import { NextResponse } from "next/server";
-import { connectDB } from "@/lib/db";
-import StudentData from "@/models/StudentData";
+import { checkStateProvider } from "@/backend/db/state";
+import { ensureStoreReady } from "@/backend/core/store";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    await connectDB();
-
-    const students = await StudentData.find().limit(10).lean();
+    const status = await checkStateProvider();
+    const store = await ensureStoreReady();
 
     return NextResponse.json({
-      ok: true,
-      count: students.length,
-      students,
+      ok: status.ok,
+      provider: status.provider,
+      database: status,
+      counts: {
+        events: store.events.length,
+        tickets: store.tickets.length,
+        orders: store.orders.length,
+        scanLogs: store.scanLogs.length,
+      },
     });
   } catch (error) {
     console.error("DB_TEST_ERROR:", error);

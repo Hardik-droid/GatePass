@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { isSupabaseAuthConfigured, setSessionCookie } from "@/authO/lib/server/session";
-import { getAppUrl, getSupabasePublishableKey, getSupabaseUrl } from "@/utils/supabase/env";
+import { setSessionCookie } from "@/authO/lib/server/session";
+import { isDevAuthEnabled } from "@/utils/env";
+import { isNeonAuthConfigured } from "@/authO/lib/server/neon-auth";
 
 type Params = { provider: string };
 
@@ -21,26 +21,17 @@ export async function GET(
 
   const redirect = safeRedirect(request.nextUrl.searchParams.get("redirect") || "/app");
 
-  if (isSupabaseAuthConfigured()) {
-    const supabase = createClient(
-      getSupabaseUrl(),
-      getSupabasePublishableKey(),
-      { auth: { persistSession: false, autoRefreshToken: false } },
+  if (isNeonAuthConfigured()) {
+    return NextResponse.redirect(
+      new URL(
+        `/login?redirect=${encodeURIComponent(redirect)}&error=${encodeURIComponent("Use Neon Auth email sign-in until social OAuth is enabled in Neon Auth.")}`,
+        request.url,
+      ),
     );
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: `${getAppUrl(request)}/api/auth/callback?redirect=${encodeURIComponent(redirect)}`,
-      },
-    });
-    if (error || !data.url) {
-      return NextResponse.json({ message: error?.message || "OAuth redirect could not be created" }, { status: 400 });
-    }
-    return NextResponse.redirect(data.url);
   }
 
-  if (process.env.NEXT_PUBLIC_ENABLE_DEV_AUTH !== "true") {
-    return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent("Authentication provider is not configured")}`, request.url));
+  if (!isDevAuthEnabled()) {
+    return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent("Neon Auth is not configured")}`, request.url));
   }
 
   const response = NextResponse.redirect(new URL(redirect, request.url));

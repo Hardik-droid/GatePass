@@ -8,7 +8,12 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "."),
+      "@/backend": path.resolve(__dirname, "backend"),
+      "@/authO": path.resolve(__dirname, "authO/src"),
+      "@/database": path.resolve(__dirname, "database/src"),
+      "@/utils": path.resolve(__dirname, "frontend/src/utils"),
+      "@": path.resolve(__dirname, "frontend/src"),
+      "server-only": path.resolve(__dirname, "test-utils/server-only.ts"),
     },
   },
 });

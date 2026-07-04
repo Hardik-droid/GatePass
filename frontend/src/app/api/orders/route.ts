@@ -8,7 +8,7 @@ import { orderCreateSchema } from "@/backend/core/schemas";
 import { withIdempotency } from "@/backend/modules/idempotency";
 import { createOrder, listOrders } from "@/backend/modules/orders";
 import { requireApiPermission, requireUser } from "@/backend/modules/auth";
-import { isDevAuthEnabled } from "@/utils/supabase/env";
+import { isDevAuthEnabled } from "@/utils/env";
 
 export async function GET(request: NextRequest) {
   return withErrorHandling(async () => {

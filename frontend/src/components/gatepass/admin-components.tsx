@@ -110,7 +110,7 @@ export function RevenueChart() {
     <div className="h-80 rounded-[28px] border border-white/10 bg-white/[0.055] p-5">
       <p className="mb-4 text-sm font-black uppercase tracking-[0.18em] text-white/52">Revenue trend</p>
       {mounted ? (
-        <ResponsiveContainer width="100%" height="88%">
+        <ResponsiveContainer width="100%" height={240}>
           <AreaChart data={revenueData}>
             <defs>
               <linearGradient id="revenue" x1="0" x2="0" y1="0" y2="1">
@@ -126,7 +126,7 @@ export function RevenueChart() {
           </AreaChart>
         </ResponsiveContainer>
       ) : (
-        <div className="h-[88%] rounded-2xl bg-black/20" />
+        <div className="h-[240px] rounded-2xl bg-black/20" />
       )}
     </div>
   );
@@ -142,7 +142,7 @@ export function AttendanceChart() {
     <div className="h-80 rounded-[28px] border border-white/10 bg-white/[0.055] p-5">
       <p className="mb-4 text-sm font-black uppercase tracking-[0.18em] text-white/52">Attendance by day</p>
       {mounted ? (
-        <ResponsiveContainer width="100%" height="88%">
+        <ResponsiveContainer width="100%" height={240}>
           <BarChart data={revenueData}>
             <CartesianGrid stroke="rgba(255,255,255,.08)" vertical={false} />
             <XAxis dataKey="day" stroke="rgba(255,255,255,.45)" />
@@ -152,7 +152,7 @@ export function AttendanceChart() {
           </BarChart>
         </ResponsiveContainer>
       ) : (
-        <div className="h-[88%] rounded-2xl bg-black/20" />
+        <div className="h-[240px] rounded-2xl bg-black/20" />
       )}
     </div>
   );

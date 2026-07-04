@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { isDevAuthEnabled } from "@/utils/supabase/env";
+import { isDevAuthEnabled } from "@/utils/env";
 
 export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const searchParams = useSearchParams();
@@ -72,7 +72,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
             Tickets, QR entry, and gatepass control in one account.
           </h1>
           <p className="mt-5 max-w-xl text-lg font-semibold text-[var(--ink)]/62">
-            Use email authentication or continue with Google or Apple. In local dev, social buttons create a safe dev session when Supabase keys are missing.
+            Use email authentication with Neon Auth. In local dev, the bypass button creates a signed owner session when enabled.
           </p>
         </section>
 
@@ -117,6 +117,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
                 Name
                 <input
                   value={name}
+                  autoComplete="name"
                   onChange={(event) => setName(event.target.value)}
                   className="h-12 rounded-2xl border border-[#0a7f8f]/14 px-4 outline-none focus:border-[#0a7f8f]/48"
                   placeholder="Your name"
@@ -128,6 +129,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
               <input
                 type="email"
                 required
+                autoComplete="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 className="h-12 rounded-2xl border border-[#0a7f8f]/14 px-4 outline-none focus:border-[#0a7f8f]/48"
@@ -140,6 +142,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
                 type="password"
                 required
                 minLength={6}
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 className="h-12 rounded-2xl border border-[#0a7f8f]/14 px-4 outline-none focus:border-[#0a7f8f]/48"

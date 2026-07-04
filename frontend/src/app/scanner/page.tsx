@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "@/authO/lib/server/session";
 import { ScannerPageUI } from "@/components/gatepass/scanner-ui";
-import { isDevAuthEnabled } from "@/utils/supabase/env";
+import { isDevAuthEnabled } from "@/utils/env";
 
 export default async function ScannerPage() {
   const session = await getServerSession();

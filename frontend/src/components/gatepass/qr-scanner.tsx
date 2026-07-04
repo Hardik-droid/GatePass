@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import jsQR from "jsqr";
 import { Camera, CameraOff, RefreshCw, Volume2, VolumeX } from "lucide-react";
 
@@ -8,6 +8,10 @@ interface QRScannerProps {
   onScan: (text: string) => void;
   isScanningActive?: boolean;
 }
+
+type WindowWithWebkitAudio = Window & {
+  webkitAudioContext?: typeof AudioContext;
+};
 
 export function QRScanner({ onScan, isScanningActive = true }: QRScannerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -27,7 +31,9 @@ export function QRScanner({ onScan, isScanningActive = true }: QRScannerProps) {
   function playBeep() {
     if (!soundEnabled) return;
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const AudioContextConstructor = window.AudioContext || (window as WindowWithWebkitAudio).webkitAudioContext;
+      if (!AudioContextConstructor) return;
+      const audioCtx = new AudioContextConstructor();
       const oscillator = audioCtx.createOscillator();
       const gainNode = audioCtx.createGain();
 
@@ -46,7 +52,7 @@ export function QRScanner({ onScan, isScanningActive = true }: QRScannerProps) {
   }
 
   // Update available video input devices list
-  async function updateDeviceList(currentSelectedId?: string) {
+  const updateDeviceList = useCallback(async (currentSelectedId?: string) => {
     try {
       const mediaDevices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = mediaDevices.filter((device) => device.kind === "videoinput");
@@ -68,12 +74,26 @@ export function QRScanner({ onScan, isScanningActive = true }: QRScannerProps) {
     } catch (err) {
       console.error("Error enumerating devices:", err);
     }
-  }
+  }, [selectedDeviceId]);
 
   // List available video input devices initially
   useEffect(() => {
     if (typeof window !== "undefined" && navigator.mediaDevices) {
-      updateDeviceList("");
+      void navigator.mediaDevices.enumerateDevices().then((mediaDevices) => {
+        const videoDevices = mediaDevices.filter((device) => device.kind === "videoinput");
+        setDevices(videoDevices);
+
+        if (videoDevices.length > 0) {
+          const backCamera = videoDevices.find(
+            (device) =>
+              device.label.toLowerCase().includes("back") ||
+              device.label.toLowerCase().includes("environment")
+          );
+          setSelectedDeviceId(backCamera?.deviceId || videoDevices[0].deviceId);
+        }
+      }).catch((err) => {
+        console.error("Error enumerating devices:", err);
+      });
     }
   }, []);
 
@@ -84,11 +104,13 @@ export function QRScanner({ onScan, isScanningActive = true }: QRScannerProps) {
       return;
     }
 
-    startCamera();
+    void startCamera();
 
     return () => {
       stopCamera();
     };
+    // The camera should restart only when the selected device or scanner activation changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDeviceId, isScanningActive]);
 
   async function startCamera() {
@@ -134,10 +156,11 @@ export function QRScanner({ onScan, isScanningActive = true }: QRScannerProps) {
 
         animationFrameRef.current = requestAnimationFrame(tick);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error accessing camera:", err);
+      const name = err instanceof DOMException ? err.name : "";
       setPermissionError(
-        err.name === "NotAllowedError" || err.name === "PermissionDeniedError"
+        name === "NotAllowedError" || name === "PermissionDeniedError"
           ? "Camera access denied. Please grant camera permissions to scan tickets."
           : "Unable to start camera feed. Please check connection or select another device."
       );

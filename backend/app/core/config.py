@@ -7,9 +7,6 @@ class Settings(BaseSettings):
     app_url: str = "http://localhost:3000"
     environment: str = "development"
 
-    supabase_url: str | None = None
-    supabase_service_role_key: str | None = None
-
     razorpay_key_id: str | None = None
     razorpay_key_secret: str | None = None
     razorpay_webhook_secret: str | None = None

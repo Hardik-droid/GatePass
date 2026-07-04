@@ -1,5 +1,5 @@
 import { createId, nowIso } from "./ids";
-import { deleteStateRow, loadStateRows, upsertStateRows, upsertStateRow } from "../db/supabase";
+import { deleteStateRow, getStateProvider, loadStateRows, upsertStateRows, upsertStateRow } from "../db/state";
 
 type Row = Record<string, any>;
 
@@ -234,7 +234,7 @@ async function bootstrapStore() {
 
 function ensureBootstrap() {
   globalStore.__gatepassStoreBootstrap ??= bootstrapStore().catch((error) => {
-    console.error("Supabase store bootstrap failed", error);
+    console.error(`${getStateProvider()} store bootstrap failed`, error);
     if (process.env.NODE_ENV === "production") {
       throw error;
     }
@@ -254,7 +254,7 @@ export function getStore() {
   return globalStore.__gatepassStore;
 }
 
-export async function refreshStoreFromSupabase() {
+export async function refreshStoreFromDatabase() {
   globalStore.__gatepassStoreBootstrap = undefined;
   await ensureBootstrap();
   return getStore();

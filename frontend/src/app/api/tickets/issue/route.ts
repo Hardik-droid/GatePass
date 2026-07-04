@@ -1,19 +1,17 @@
 import { NextResponse } from "next/server";
 import QRCode from "qrcode";
-import { nanoid } from "nanoid";
-import { connectDB } from "@/lib/db";
-import StudentData from "@/models/StudentData";
-import Ticket from "@/models/Ticket";
-import { createQrPayload, hashToken } from "@/lib/qrToken";
+import { createId, nowIso } from "@/backend/core/ids";
+import { ensureStoreReady, persistStoreRecord } from "@/backend/core/store";
+import { createSecureQrToken, hashQrToken } from "@/backend/modules/qr-service";
+import { serializeTicket } from "@/backend/modules/tickets";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
-    await connectDB();
-
+    const store = await ensureStoreReady();
     const body = await req.json();
-    const { email, eventId, paymentId, purchaseId } = body;
+    const { email, eventId, paymentId, purchaseId, name, phone, ticketCategoryId } = body;
 
     if (!email || !eventId) {
       return NextResponse.json(
@@ -22,37 +20,53 @@ export async function POST(req: Request) {
       );
     }
 
-    const student = await StudentData.findOne({ email }).lean();
-
-    if (!student) {
+    const event = store.events.find((item) => item.id === eventId);
+    if (!event) {
       return NextResponse.json(
-        { ok: false, reason: "student_not_found" },
+        { ok: false, reason: "event_not_found" },
         { status: 404 },
       );
     }
 
-    const ticketId = `gp_${nanoid(18)}`;
-    const rawToken = nanoid(48);
-    const tokenHash = hashToken(rawToken);
-    const qrPayload = createQrPayload(ticketId, rawToken);
-
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-    const studentDoc = student as Record<string, unknown>;
-
-    const ticket = await Ticket.create({
+    const category =
+      store.ticketCategories.find((item) => item.id === ticketCategoryId && item.eventId === eventId) ??
+      store.ticketCategories.find((item) => item.eventId === eventId);
+    const ticketId = createId("tck").toUpperCase();
+    const qrPayload = createSecureQrToken(ticketId, eventId);
+    const issuedAt = nowIso();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const attendeeName = String(name || email.split("@")[0] || "Guest");
+    const ticket = {
+      id: ticketId,
       ticketId,
-      userId: studentDoc._id,
-      email: studentDoc.email,
-      rNo: studentDoc.rNo ?? studentDoc.rNO,
-      hName: studentDoc.hName,
-      eventId,
-      tokenHash,
+      orderId: String(purchaseId || paymentId || ""),
+      userId: String(email),
+      organizationId: String(event.organizationId ?? store.organizations[0]?.id ?? ""),
+      eventId: String(eventId),
+      ticketCategoryId: String(category?.id ?? ""),
+      attendeeName,
+      attendeeEmail: String(email),
+      attendeePhone: String(phone ?? ""),
+      email: String(email),
       status: "active",
+      checkedInAt: "",
+      checkedInGateId: "",
+      checkedInBy: "",
+      scannedAt: "",
+      scannedBy: "",
+      qrToken: qrPayload,
+      qrTokenHash: hashQrToken(qrPayload),
+      walletEnabled: true,
+      appleWalletPassId: "",
+      googleWalletPassId: "",
+      walletLastUpdatedAt: "",
+      createdAt: issuedAt,
       expiresAt,
-      paymentId: paymentId || "local-test-payment",
-      purchaseId: purchaseId || "local-test-purchase",
-    });
+      paymentId: String(paymentId || "local-test-payment"),
+      purchaseId: String(purchaseId || "local-test-purchase"),
+    };
+
+    await persistStoreRecord("tickets", ticket);
 
     const qrImageDataUrl = await QRCode.toDataURL(qrPayload, {
       errorCorrectionLevel: "M",
@@ -62,15 +76,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       ok: true,
-      ticket: {
-        ticketId: ticket.ticketId,
-        email: ticket.email,
-        rNo: ticket.rNo,
-        hName: ticket.hName,
-        eventId: ticket.eventId,
-        status: ticket.status,
-        expiresAt: ticket.expiresAt,
-      },
+      ticket: serializeTicket(ticket),
       qrPayload,
       qrImageDataUrl,
     });

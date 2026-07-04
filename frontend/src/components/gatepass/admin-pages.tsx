@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { startTransition, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AppShell, AttendanceChart, AuditTimeline, EmptyState, MapPanel, MetricsGrid, OrdersTable, RevenueChart, ScannerResult, StatusBadge, TicketLifecycle } from "@/components/gatepass/admin-components";
 import { auditEvents, ticketCategories } from "@/lib/mock-data";
 
@@ -45,23 +46,244 @@ export function QuickActions() {
 }
 
 export function BuilderPage() {
-  const fields = ["Event name", "Event type", "Description", "Date/time", "Venue", "Poster upload", "Organizer details", "Capacity", "Refund policy", "Terms", "Help number", "Visibility"];
-  const types = ["Public event", "Private event", "Invite-only event", "Internal campus event", "Paid workshop", "Free registration", "Donation-based event", "Hostel gate pass", "Multi-day concert"];
+  const router = useRouter();
+  const [events, setEvents] = useState<Array<{ id: string; slug: string; title: string; status: string; venue: string; city: string }>>([]);
+  const [form, setForm] = useState({
+    title: "",
+    eventType: "concert",
+    description: "",
+    startTime: "",
+    venue: "",
+    city: "Mumbai",
+    visibility: "public",
+    status: "draft",
+    gpsRequired: false,
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+  const [createdEvent, setCreatedEvent] = useState<{ id: string; slug: string; title: string } | null>(null);
+  const types = ["concert", "party", "workshop", "festival", "campus", "hostel-gate-pass", "invite-only", "free-registration", "donation"];
+
+  function updateField<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function loadEvents() {
+    try {
+      const response = await fetch("/api/events", { cache: "no-store" });
+      const payload = await response.json();
+      setEvents(Array.isArray(payload.items) ? payload.items : []);
+    } catch {
+      setEvents([]);
+    }
+  }
+
+  useEffect(() => {
+    void loadEvents();
+  }, []);
+
+  async function submitEvent(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitting(true);
+    setMessage("");
+    setCreatedEvent(null);
+
+    try {
+      const response = await fetch("/api/events", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "idempotency-key": crypto.randomUUID(),
+        },
+        body: JSON.stringify({
+          ...form,
+          startTime: form.startTime ? new Date(form.startTime).toISOString() : undefined,
+        }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.message || payload.error || "Event creation failed");
+      }
+
+      const created = payload.event as { id?: string; slug?: string; title?: string } | undefined;
+      if (!created?.id || !created.slug) {
+        throw new Error("Event was created but response is incomplete");
+      }
+
+      setCreatedEvent({
+        id: created.id,
+        slug: created.slug,
+        title: String(created.title ?? form.title),
+      });
+      const nextEvent = {
+        id: created.id,
+        slug: created.slug,
+        title: String(created.title ?? form.title),
+        status: String(payload.event?.status ?? form.status),
+        venue: String(payload.event?.venue ?? form.venue),
+        city: String(payload.event?.city ?? form.city),
+      };
+      setEvents((current) => [
+        nextEvent,
+        ...current.filter((item) => item.id !== nextEvent.id),
+      ]);
+      setMessage("Event created successfully.");
+      startTransition(() => {
+        router.refresh();
+      });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Event creation failed");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <AppShell title="Event Builder">
       <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
-        <div className="grid gap-4 md:grid-cols-2">
-          {fields.map((field) => (
-            <label key={field} className="grid gap-2 rounded-[22px] border border-white/10 bg-white/[0.055] p-4">
-              <span className="text-sm font-bold">{field}</span>
-              <input className="rounded-2xl border border-white/10 bg-black/24 px-4 py-3 outline-none" placeholder={field} />
-            </label>
-          ))}
-        </div>
+        <form onSubmit={submitEvent} className="grid gap-4 md:grid-cols-2">
+          <label className="grid gap-2 rounded-[22px] border border-white/10 bg-white/[0.055] p-4 md:col-span-2">
+            <span className="text-sm font-bold">Event name</span>
+            <input
+              required
+              value={form.title}
+              onChange={(event) => updateField("title", event.target.value)}
+              className="rounded-2xl border border-white/10 bg-black/24 px-4 py-3 outline-none"
+              placeholder="Midnight Frequency"
+            />
+          </label>
+          <label className="grid gap-2 rounded-[22px] border border-white/10 bg-white/[0.055] p-4">
+            <span className="text-sm font-bold">Event type</span>
+            <select
+              value={form.eventType}
+              onChange={(event) => updateField("eventType", event.target.value)}
+              className="rounded-2xl border border-white/10 bg-black/24 px-4 py-3 outline-none"
+            >
+              {types.map((type) => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-2 rounded-[22px] border border-white/10 bg-white/[0.055] p-4">
+            <span className="text-sm font-bold">Date/time</span>
+            <input
+              type="datetime-local"
+              required
+              value={form.startTime}
+              onChange={(event) => updateField("startTime", event.target.value)}
+              className="rounded-2xl border border-white/10 bg-black/24 px-4 py-3 outline-none"
+            />
+          </label>
+          <label className="grid gap-2 rounded-[22px] border border-white/10 bg-white/[0.055] p-4 md:col-span-2">
+            <span className="text-sm font-bold">Description</span>
+            <textarea
+              value={form.description}
+              onChange={(event) => updateField("description", event.target.value)}
+              className="min-h-28 rounded-2xl border border-white/10 bg-black/24 px-4 py-3 outline-none"
+              placeholder="Late-night live set with secure QR entry."
+            />
+          </label>
+          <label className="grid gap-2 rounded-[22px] border border-white/10 bg-white/[0.055] p-4">
+            <span className="text-sm font-bold">Venue</span>
+            <input
+              required
+              value={form.venue}
+              onChange={(event) => updateField("venue", event.target.value)}
+              className="rounded-2xl border border-white/10 bg-black/24 px-4 py-3 outline-none"
+              placeholder="Main Ground"
+            />
+          </label>
+          <label className="grid gap-2 rounded-[22px] border border-white/10 bg-white/[0.055] p-4">
+            <span className="text-sm font-bold">City</span>
+            <input
+              value={form.city}
+              onChange={(event) => updateField("city", event.target.value)}
+              className="rounded-2xl border border-white/10 bg-black/24 px-4 py-3 outline-none"
+              placeholder="Mumbai"
+            />
+          </label>
+          <label className="grid gap-2 rounded-[22px] border border-white/10 bg-white/[0.055] p-4">
+            <span className="text-sm font-bold">Visibility</span>
+            <select
+              value={form.visibility}
+              onChange={(event) => updateField("visibility", event.target.value)}
+              className="rounded-2xl border border-white/10 bg-black/24 px-4 py-3 outline-none"
+            >
+              <option value="public">public</option>
+              <option value="private">private</option>
+            </select>
+          </label>
+          <label className="grid gap-2 rounded-[22px] border border-white/10 bg-white/[0.055] p-4">
+            <span className="text-sm font-bold">Status</span>
+            <select
+              value={form.status}
+              onChange={(event) => updateField("status", event.target.value)}
+              className="rounded-2xl border border-white/10 bg-black/24 px-4 py-3 outline-none"
+            >
+              <option value="draft">draft</option>
+              <option value="live">live</option>
+            </select>
+          </label>
+          <label className="flex items-center justify-between rounded-[22px] border border-white/10 bg-white/[0.055] p-4 md:col-span-2">
+            <div>
+              <span className="text-sm font-bold">Require GPS check</span>
+              <p className="mt-1 text-sm text-white/52">Turn this on for gatepass or location-sensitive entry.</p>
+            </div>
+            <input
+              type="checkbox"
+              checked={form.gpsRequired}
+              onChange={(event) => updateField("gpsRequired", event.target.checked)}
+              className="h-5 w-5"
+            />
+          </label>
+          {message ? (
+            <div className={`rounded-2xl px-4 py-3 text-sm font-bold md:col-span-2 ${createdEvent ? "bg-emerald-400/15 text-emerald-200" : "bg-red-400/15 text-red-200"}`}>
+              {message}
+            </div>
+          ) : null}
+          {createdEvent ? (
+            <div className="rounded-2xl border border-white/10 bg-black/24 px-4 py-4 md:col-span-2">
+              <p className="font-bold">{createdEvent.title}</p>
+              <p className="mt-1 text-sm text-white/58">Created with slug `{createdEvent.slug}`.</p>
+              <div className="mt-3 flex flex-wrap gap-3">
+                <Link href={`/events/${createdEvent.id}`} className="rounded-full bg-white/10 px-4 py-2 text-sm font-bold hover:bg-white/16">Open event</Link>
+                <Link href="/dashboard/orders" className="rounded-full bg-white/10 px-4 py-2 text-sm font-bold hover:bg-white/16">Go to dashboard</Link>
+              </div>
+            </div>
+          ) : null}
+          <div className="md:col-span-2">
+            <button
+              type="submit"
+              disabled={submitting}
+              className="rounded-full bg-[var(--gp-champagne)] px-6 py-3 text-sm font-black uppercase tracking-[0.14em] text-black disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {submitting ? "Creating..." : "Create event"}
+            </button>
+          </div>
+        </form>
         <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-5">
-          <p className="text-sm font-black uppercase tracking-[0.18em] text-white/52">Event types</p>
+          <p className="text-sm font-black uppercase tracking-[0.18em] text-white/52">Live events</p>
           <div className="mt-4 grid gap-2">
-            {types.map((type) => (
+            {events.length ? events.map((event) => (
+              <div key={event.id} className="rounded-2xl border border-white/10 bg-black/24 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-bold">{event.title}</p>
+                    <p className="mt-1 text-sm text-white/52">{event.venue}, {event.city}</p>
+                  </div>
+                  <StatusBadge status={event.status} />
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Link href={`/events/${event.slug || event.id}`} className="rounded-full bg-white/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] hover:bg-white/16">
+                    View
+                  </Link>
+                  <Link href={`/book/${event.slug || event.id}`} className="rounded-full bg-white/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] hover:bg-white/16">
+                    Book
+                  </Link>
+                </div>
+              </div>
+            )) : types.map((type) => (
               <StatusBadge key={type} status={type} />
             ))}
           </div>
